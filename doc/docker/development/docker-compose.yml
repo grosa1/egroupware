@@ -64,11 +64,11 @@ services:
     #environment:
     #- LANG=de
     volumes:
-    - sources:/var/www
-    - data:/var/lib/egroupware
-    - sessions:/var/lib/php/sessions
-    - cache:/root
-    - push-config:/var/lib/egroupware-push
+    - $PWD/sources:/var/www
+    - $PWD/data:/var/lib/egroupware
+    - $PWD/sessions:/var/lib/php/sessions
+    - $PWD/cache:/root
+    - $PWD/push-config:/var/lib/egroupware-push
     # if you want to use the host database:
     # 1. comment out the whole db service below AND
     # 2. set EGW_DB_HOST=localhost AND
@@ -123,7 +123,7 @@ services:
   nginx:
     image: nginx:stable-alpine
     volumes:
-    - sources:/var/www:ro
+    - $PWD/sources:/var/www:ro
     # to add a certificate create a certificate.pem containing (in that order)
     # 1. private key
     # 2. public key
@@ -152,7 +152,7 @@ services:
     - MYSQL_ROOT_PASSWORD=secret
     - MARIADB_AUTO_UPGRADE=true
     volumes:
-    - db:/var/lib/mysql
+    - $PWD/db:/var/lib/mysql
     # to add an own persistent configuration
     #- ./mariadb.cnf:/etc/mysql/mariadb.conf.d/egroupware.cnf
     container_name: egroupware-db
@@ -167,9 +167,9 @@ services:
     command:
       - /var/www/server.php
     volumes:
-    - sources-push:/var/www
-    - sessions:/var/lib/php/sessions
-    - push-config:/var/lib/egroupware-push
+    - $PWD/sources-push:/var/www
+    - $PWD/sessions:/var/lib/php/sessions
+    - $PWD/push-config:/var/lib/egroupware-push
     container_name: egroupware-push
     restart: always
     depends_on:
@@ -204,9 +204,9 @@ services:
     image: "quay.io/egroupware/collabora-key:stable"
     #image: collabora/code:latest
     volumes:
-    - collabora-config:/etc/loolwsd
+    - $PWD/collabora-config:/etc/loolwsd
       # support for Collabora/CODE 21.11+
-    - collabora-config:/etc/coolwsd
+    - $PWD/collabora-config:/etc/coolwsd
     restart: always
     container_name: collabora-key
     # set the ip-address of your docker host AND your official DNS name so Collabora
@@ -221,7 +221,7 @@ services:
     image: "quay.io/egroupware/collabora-key:latest"
     command:  bash -c "test -f /tmp/coolwsd/coolwsd.xml || (cp -p /etc/coolwsd/* /tmp/coolwsd && cd /tmp/coolwsd && ln -s coolwsd.conf loolwsd.conf)"
     volumes:
-      - collabora-config:/tmp/coolwsd
+      - $PWD/collabora-config:/tmp/coolwsd
 
   # Rocket.Chat server
   rocketchat:
@@ -229,7 +229,7 @@ services:
     command: bash -c 'for i in `seq 1 30`; do node main.js && s=$$? && break || s=$$?; echo "Tried $$i times. Waiting 5 secs..."; sleep 5; done; (exit $$s)'
     restart: unless-stopped
     volumes:
-      - rocketchat-uploads:/app/uploads
+      - $PWD/rocketchat-uploads:/app/uploads
     # if EGroupware uses a certificate from a private CA, OAuth authentication will fail, you need to:
     # - have the CA certificate stored at /etc/egroupware-docker/private-ca.crt
     # - uncomment the next 2 lines about the private CA:
@@ -256,8 +256,8 @@ services:
     image: mongo:4.2
     restart: unless-stopped
     volumes:
-      - mongo:/data/db
-      - rocketchat-dumps:/dump
+      - $PWD/mongo:/data/db
+      - $PWD/rocketchat-dumps:/dump
     command: mongod --smallfiles --oplogSize 128 --replSet rs0 --storageEngine=mmapv1
     container_name: rocketchat-mongo
   # this container's job is just run the command to initialize the replica set.
