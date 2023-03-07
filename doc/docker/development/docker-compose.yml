@@ -110,7 +110,7 @@ services:
     #- EGW_EXTRA_APP_OLDAPI=https://github.com/EGroupware/phpgwapi.git https://github.com/EGroupware/etemplate.git
     #
     # XDEBUG_REMOTE_HOST need to be set, if the host running the IDE is different from 172.17.0.1 (Mac can use docker.for.mac.localhost)
-    - XDEBUG_REMOTE_HOST=host.docker.internal
+    - XDEBUG_REMOTE_HOST=172.17.0.1
     restart: always
     depends_on:
     - db
@@ -152,7 +152,8 @@ services:
     - MYSQL_ROOT_PASSWORD=secret
     #- MARIADB_AUTO_UPGRADE=true
     volumes:
-    - $PWD/db:/var/lib/mysql
+    #for WSL2 no $PWD/ here! otherwhise connection is denied
+    - db:/var/lib/mysql
     # to add an own persistent configuration
     #- ./mariadb.cnf:/etc/mysql/mariadb.conf.d/egroupware.cnf
     container_name: egroupware-db
