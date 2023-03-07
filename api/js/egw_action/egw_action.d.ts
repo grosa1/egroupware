@@ -881,4 +881,5 @@ declare class egwDynStyleSheet {
  * rules - updating a single stylesheet rule is way more efficient than updating
  * the element style of many objects.
  */
-declare var EGW_DYNAMIC_STYLESHEET: any;
+//this is now a ts file --> no declaration at this place needed TODO: check with Ralf
+//declare var EGW_DYNAMIC_STYLESHEET: any;

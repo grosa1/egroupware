@@ -800,6 +800,7 @@ egwAction.prototype.set_data = function(_value)
 
 egwAction.prototype.updateAction = function(_data)
 {
+	//_setterOnly:mixed is not ideal  --> find other solution?
 	egwActionStoreJSON(_data, this, "data");
 };
 

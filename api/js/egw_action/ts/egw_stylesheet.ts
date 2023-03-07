@@ -15,9 +15,9 @@
  * the element style of many objects.
  */
 class EgwDynamicStyleSheet {
-    readonly styleSheet: CSSStyleSheet;
+    private readonly styleSheet: CSSStyleSheet;
     //mapping of selectors to indices in the Stylesheet's CSSRuleList
-    selectors: Map<string, number>;
+    private selectors: Map<string, number>;
 
     //selector count is no longer needed, since insert rules returns the index to store in the map above
 
@@ -36,7 +36,7 @@ class EgwDynamicStyleSheet {
      * @param selector is the css selector to which the given rule should apply
      * @param rule is the rule which is bound to the selector.
      */
-    updateRule(selector: string, rule: string): void {
+    public updateRule(selector: string, rule: string): void {
         // Remove any existing rule first
         if (this.selectors.has(selector)) {
             let index: number = this.selectors.get(selector)
@@ -49,4 +49,4 @@ class EgwDynamicStyleSheet {
     }
 }
 
-const EGW_DYNAMIC_STYLESHEET: EgwDynamicStyleSheet = new EgwDynamicStyleSheet();
+export const EGW_DYNAMIC_STYLESHEET: EgwDynamicStyleSheet = new EgwDynamicStyleSheet();
