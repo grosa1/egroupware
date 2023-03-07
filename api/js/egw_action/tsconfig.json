@@ -6,9 +6,10 @@
     "lib": ["es2020","dom"],
     "removeComments": false,
     "outDir": "./compiledJs",
-    "sourceMap": true
+    "sourceMap": true,
+    "allowJs": true
   },
-  "exclude": [
-    "node_modules"
+  "include": [
+    "./ts/**/*"
   ]
 }
