@@ -31,6 +31,7 @@ function egwDynStyleSheet()
 		document.getElementsByTagName("head")[0].appendChild(style);
 
 		this.styleSheet = style.sheet ? style.sheet : style.styleSheet;
+		// maps a Css selector to an index
 		this.selectors = {};
 		this.selectorCount = 0;
 
