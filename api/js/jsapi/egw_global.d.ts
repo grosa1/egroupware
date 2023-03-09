@@ -863,7 +863,7 @@ declare interface IegwWndLocal extends IegwGlobal
 	 * @param {object} _context
 	 * @returns {mixed|Promise}
 	 */
-	applyFunc(_func : string|Function, args : Array<any>, _context? : Object)  : Promise<any>|any
+	applyFunc(_func : string|Function, args : IArguments, _context? : Object)  : Promise<any>|any
 
 	/**
 	 * Registers a new handler plugin.

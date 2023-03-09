@@ -162,6 +162,7 @@ export function egwActionHandler(_executeEvent)
 
 /**
  * Associative array where action classes may register themselves
+ * TODO(they never do??)
  */
 if (typeof window._egwActionClasses == "undefined")
 	window._egwActionClasses = {};
