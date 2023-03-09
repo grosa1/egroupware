@@ -1,7 +1,7 @@
 // noinspection JSUnusedGlobalSymbols
 //test
-let x =0;
-console.log(x)
+import {egw} from "../../jsapi/egw_global";
+
 /**
  * eGroupWare egw_action framework - egw action framework
  *
@@ -72,19 +72,6 @@ export function egwObjectLength(_obj) {
     return len;
 }
 
-//TODO: still wanted?
-/**
- * IE Fix for array.indexOf
- */
-if (typeof Array.prototype.indexOf == "undefined") {
-    Array.prototype.indexOf = function (_elem) {
-        for (let i = 0; i < this.length; i++) {
-            if (this[i] === _elem)
-                return i;
-        }
-        return -1;
-    };
-}
 
 /**
  * Isolates the shift state from an event object
@@ -110,12 +97,12 @@ export function egwPreventSelect(e) {
 }
 
 export function egwUnfocus() {
-    //TODO ask here
+    //TODO
     if (document.activeElement) {
         try {
             (document.activeElement as HTMLElement).blur();
         } catch (e) {
-            console.log("Can't be unfocused because active element isn't an HTMLElement")
+            //console.log("Can't be unfocused because active element isn't an HTMLElement")
         }
 
     }
@@ -329,9 +316,7 @@ export class egwFnct {
         } else if (typeof _value == "string" && _value.substring(0, 11) === 'javaScript:') {
             this.functionToPerform = function (): any {
                 const manager = this.context && this.context.getManager ? this.context.getManager() : null;
-                //TODO: what does this do?
-                // return egw.applyFunc(_value.substring(11), arguments, (manager ? manager.data.context : null) || window);
-                return false // Default
+                return egw.applyFunc(_value.substring(11), arguments, (manager ? manager.data.context : null) || window);
             }
         } else if (this.acceptedTypes.includes(typeof _value)) {
             this.value = _value;
@@ -344,8 +329,8 @@ export class egwFnct {
     /**
      * Executes the function
      */
-    public exec(){
-        this.functionToPerform? this.functionToPerform.apply(this.context,arguments):this.value
+    public exec() {
+        this.functionToPerform ? this.functionToPerform.apply(this.context, arguments) : this.value
     }
 
 }
@@ -354,22 +339,21 @@ export class egwFnct {
 /**
  * Checks whether this is currently run on a mobile browser
  */
-let _egw_mobileBrowser = null;
+let _egw_mobileBrowser: boolean = null;
 
-export function egwIsMobile() {
-
+export function egwIsMobile(): boolean
+{
     if (_egw_mobileBrowser == null) {
         let ua = navigator.userAgent;
-//TODO: this is not perfectly up to date
         _egw_mobileBrowser =
-            ua.match(/iPhone/i) || ua.match(/iPad/i) || ua.match(/iPod/) ||
-            ua.match(/Android/i) || ua.match(/SymbianOS/i);
+            !!(ua.match(/iPhone/i) || ua.match(/iPad/i) || ua.match(/iPod/) ||
+                ua.match(/Android/i) || ua.match(/SymbianOS/i));
     }
 
     return _egw_mobileBrowser;
 }
 
-//window.egwIsMobile = egwIsMobile;
+window.egwIsMobile = egwIsMobile;
 
 
 /**
