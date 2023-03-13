@@ -106,7 +106,15 @@
 <button id="performAction">Perform action...</button>
 <button id="selectAll">Select All</button>
 <script type="module">
-    import {egwActionManager, egwActionObjectManager} from "../../etemplate/etemplate2.min.js";
+    import {egwActionManager, egwActionObjectManager, egwActionObjectInterface} from "../egw_action.min.js";
+    import {
+        EGW_AO_STATE_SELECTED,
+        EGW_AO_STATE_FOCUSED,
+        EGW_AO_SHIFT_STATE_MULTI,
+        EGW_AO_SHIFT_STATE_NONE,
+        EGW_AO_SHIFT_STATE_BLOCK,
+    } from '../egw_action_constants.js';
+    import {egwBitIsSet, egwSetBit} from '../egw_action_common.js';
 
     var actionManager = null;
     var objectManager = null;
@@ -119,9 +127,8 @@
     // egwActionObjectInterface
     function listboxItemAOI(_node) {
         var aoi = new egwActionObjectInterface();
-
         aoi.node = _node;
-        aoi.checkBox = (jQuery(":checkbox", aoi.node))[0];
+        aoi.checkBox = aoi.node.querySelector('[type="checkbox"]')//(jQuery(":checkbox", aoi.node))[0];
         aoi.checkBox.checked = false;
 
         aoi.doGetDOMNode = function () {
@@ -152,9 +159,9 @@
             }
         });
 
-        jQuery(aoi.checkBox).change(function () {
-            aoi.updateState(EGW_AO_STATE_SELECTED, this.checked, EGW_AO_SHIFT_STATE_MULTI);
-        });
+        aoi.checkBox.addEventListener("change",(event)=> {
+            aoi.updateState(EGW_AO_STATE_SELECTED, event.target.checked, EGW_AO_SHIFT_STATE_MULTI);
+        },);
 
         aoi.doTriggerEvent = function (_event) {
             if (_event == EGW_AI_DRAG_OVER) {

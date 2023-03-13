@@ -393,8 +393,8 @@ export function egwPopupActionImplementation()
 				// Calculate context menu position from the given DOM-Node
 				var node = _context;
 
-				x = jQuery(node).offset().left;
-				y = jQuery(node).offset().top;
+				const x = jQuery(node).offset().left;
+				const y = jQuery(node).offset().top;
 
 				_context = {"posx": x, "posy": y};
 			}

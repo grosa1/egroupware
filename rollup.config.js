@@ -51,6 +51,7 @@ const config = {
         "pixelegg/js/fw_mobile.min": "pixelegg/js/fw_mobile.js",
         "api/js/jsapi/egw.min": "api/js/jsapi/egw_modules.js",
         "api/js/etemplate/etemplate2": "api/js/etemplate/etemplate2.ts",
+        "api/js/egw_action/egw_action.min": "api/js/egw_action/egw_action.js",
 
         // app.ts/js are added automatic by addAppsConfig() below
     },
