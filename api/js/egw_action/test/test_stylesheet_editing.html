@@ -3,7 +3,10 @@
 	<head>
 		<title>Stylesheet Test</title>
 		<script src="js/jquery.js"></script>
-		<script src="../compiledJs/egw_stylesheet.js"></script>
+		<script src="../egw_stylesheet.js"></script>
+		<script >
+			const s = new egwDynStyleSheet();
+		</script>
 	</head>
 	<body>
 		<h1>Test for dynamically generating stylesheets and stylesheet rules</h1>
@@ -82,13 +85,13 @@
 		<div class="container">1: Style me!</div>
 		<div class="container2">2: Style me!</div>
 		<div class="container3">3: Style me!</div>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('.container', 'background-color: blue');">1 Blue</button>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('.container', 'background-color: red');">1 Red</button>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('.container2', 'background-color: blue');">2 Blue</button>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('.container2', 'background-color: red');">2 Red</button>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('.container3', 'background-color: blue');">3 Blue</button>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('.container3', 'background-color: red');">3 Red</button>
-		<button onclick="EGW_DYNAMIC_STYLESHEET.updateRule('div', 'display: inline; width: 100px; font-family: Arial, Helvetica, sans;');">Div</button>
+		<button onclick="s.updateRule('.container', 'background-color: blue');">1 Blue</button>
+		<button onclick="s.updateRule('.container', 'background-color: red');">1 Red</button>
+		<button onclick="s.updateRule('.container2', 'background-color: blue');">2 Blue</button>
+		<button onclick="s.updateRule('.container2', 'background-color: red');">2 Red</button>
+		<button onclick="s.updateRule('.container3', 'background-color: blue');">3 Blue</button>
+		<button onclick="s.updateRule('.container3', 'background-color: red');">3 Red</button>
+		<button onclick="s.updateRule('div', 'display: inline; width: 100px; font-family: Arial, Helvetica, sans;');">Div</button>
 
 	</body>
 </html>
