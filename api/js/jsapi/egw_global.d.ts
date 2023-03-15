@@ -1238,7 +1238,7 @@ declare interface IegwWndLocal extends IegwGlobal
 	 * @param _isHtml true: add a html (no automatic quoting!), false (default): add as text
 	 * @param _options tooltip options
 	 */
-	tooltipBind(_elem : HTMLElement, _str : string, _isHtml? : boolean, _options);
+	tooltipBind(_elem : HTMLElement, _str : string, _isHtml? : boolean, _options?);
 	/**
 	 * Unbinds the tooltip from the given DOM-Node.
 	 *
