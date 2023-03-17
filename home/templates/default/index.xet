@@ -8,21 +8,13 @@
 		</et2-vbox>
 	</template>
 	<template id="home.index" template="" lang="" group="0" version="1.9.001">
-		<grid width="100%">
-			<columns>
-				<column/>
-			</columns>
-			<rows>
-				<row disabled="!@mainscreen_message">
-					<html id="mainscreen_message"/>
-				</row>
-				<row>
-					<et2-box  id="portlets">
-						<!-- Box wrapper needed to get box to auto-repeat -->
-						<et2-box  id="${row}"><portlet id="${_cont[id]}" title="$_cont[title]" color="@color" parent_node="home-index_portlets" settings="@settings" width="@width" height="@height" row="@row" col="@col" value="@content" class="@class"/></et2-box>
-					</et2-box>
-				</row>
-			</rows>
-		</grid>
-	</template>
+        <html id="mainscreen_message"></html>
+        <old-box id="portlets">
+            <!-- Box wrapper needed to get box to auto-repeat -->
+            <et2-portlet type="${row_cont[type]}" id="${row_cont[id]}" title="$row_cont[title]" color="$row_cont[color]"
+                         parent_node="home-index_portlets" settings="$row_cont[settings]"
+                         value="$row_cont[content]" class="$row_cont[class]"
+                         actions="$row_cont[actions]"/>
+        </old-box>
+    </template>
 </overlay>

@@ -858,7 +858,7 @@ export class et2_calendar_daycol extends et2_valueWidget implements et2_IDetache
 		{
 			// Avoid white, which is hard to see
 			// Use border-bottom-color, Firefox doesn't give a value with border-color
-			const color = (new ColorTranslator(event.div.css('background-color'))).RGB !== 'rgb(255,255,255)' ?
+			const color = (new ColorTranslator(event.div.css('background-color') || '#FFFFFF')).RGB !== 'rgb(255,255,255)' ?
 				event.div.css('background-color') : event.div.css('border-bottom-color');
 			if(color !== 'rgba(0, 0, 0, 0)')
 			{
@@ -1135,7 +1135,7 @@ export class et2_calendar_daycol extends et2_valueWidget implements et2_IDetache
 					minute: _ev.target.dataset.minute || 0,
 					owner: this.options.owner
 				};
-				app.calendar.add(options);
+				this.getInstanceManager().app_obj.calendar.add(options);
 				return false;
 			}
 			// Header, all day non-blocking
@@ -1151,14 +1151,14 @@ export class et2_calendar_daycol extends et2_valueWidget implements et2_IDetache
 					non_blocking: true,
 					owner: this.options.owner
 				};
-				app.calendar.add(options);
+				this.getInstanceManager().app_obj.calendar.add(options);
 				return false;
 			}
 		}
 		// Day label
 		else if(this.title.is(_ev.target) || this.title.has(_ev.target).length)
 		{
-			app.calendar.update_state({view: 'day',date: this.date.toJSON()});
+			this.getInstanceManager().app_obj.calendar.update_state({view: 'day', date: this.date.toJSON()});
 			return false;
 		}
 

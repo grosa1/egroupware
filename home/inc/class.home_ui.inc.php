@@ -76,8 +76,19 @@ class home_ui
 		{
 			$id = $p_data['id'];
 
-			if(!$id) continue;
-			$portlet = $this->get_portlet($id, $p_data, $content, $attrs, true);
+			if(!$id)
+			{
+				continue;
+			}
+			try
+			{
+				$portlet = $this->get_portlet($id, $p_data, $content, $attrs, true);
+			}
+			catch (Exception $e)
+			{
+				error_log($e);
+			}
+
 		}
 
 	}
@@ -115,8 +126,7 @@ class home_ui
 				'onExecute'	=> 'javaScript:app.home.add',
 				'children'	=> $add_portlets
 			),
-			// Favorites are sortable which needs special handling,
-			// handled directly through jQuery
+			// Favorites are sortable which needs special handling
 		);
 
 		// Add all known portlets as drop actions too.  If there are multiple matches, there will be a menu
@@ -180,8 +190,9 @@ class home_ui
 			$portlet = new $classname($context);
 			$desc = $portlet->get_description();
 			$portlet_content = array(
-				'id'	=>	$id
-			) + $desc + $context;
+					'id'   => $id,
+					'type' => $portlet->get_type()
+				) + $desc + $context;
 
 
 			// Get settings
@@ -189,7 +200,10 @@ class home_ui
 			$settings = $portlet->get_properties();
 			foreach($settings as $key => $setting)
 			{
-				if(is_array($setting) && !array_key_exists('type',$setting)) unset($settings[$key]);
+				if(is_array($setting) && !array_key_exists('type', $setting))
+				{
+					unset($settings[$key]);
+				}
 			}
 			$settings += $context;
 			foreach(home_portlet::$common_attributes as $attr)
@@ -197,6 +211,10 @@ class home_ui
 				unset($settings[$attr]);
 			}
 			$portlet_content['settings'] = $settings;
+			if(method_exists($portlet, "get_value"))
+			{
+				$portlet_content['value'] = $portlet->get_value();
+			}
 
 			// Set actions
 			// Must be after settings so actions can take settings into account
@@ -212,7 +230,7 @@ class home_ui
 
 		// Add in legacy HTML home bits
 		// TODO: DOM IDs still collide
-		//$this->get_legacy_portlets($portlets, $attributes);
+		$this->get_legacy_portlets($portlets, $attributes);
 
 		return $portlets;
 	}
@@ -259,10 +277,10 @@ class home_ui
 		}
 
 		$attributes = array(
-			'title' => $desc['title'],
-			'color' => $settings['color'],
+			'title'    => $desc['title'],
+			'color'    => $settings['color'] ?: "",
 			'settings' => $settings,
-			'actions' => $portlet->get_actions(),
+			'actions'  => $portlet->get_actions(),
 		);
 		// Add in default settings
 		self::create_default_actions($attributes['actions'], $id);
@@ -290,11 +308,12 @@ class home_ui
 				$appname = $app;
 			}
 		}
-		Framework::includeJS('', $classname, $appname ? $appname : 'home');
+		//Framework::includeJS('', $classname, $appname ? $appname : 'home');
 
 		if($full_exec)
 		{
 			$content = $portlet->exec($id, $etemplate, $full_exec ? 2 : -1);
+			Etemplate::reset_request();
 		}
 
 		return $portlet;
@@ -330,7 +349,9 @@ class home_ui
 				continue;
 			}
 			$context = array(
-				'class' => 'home_legacy_portlet', 'app' => $appname,
+				'class' => 'home_legacy_portlet',
+				'app'   => $appname,
+				'type'  => 'et2-portlet',
 				'width' => 8, 'height' => 3
 			);
 			$_content = '';
@@ -398,15 +419,17 @@ class home_ui
 				}
 				foreach($classes[$appname] as $portlet)
 				{
-					$instance = new $portlet();
+					$context = ['id' => $portlet];
+					$instance = new $portlet($context);
 					$desc = $instance->get_description();
 
 					$add_to[$portlet] = array(
-						'id'	=> $portlet,
-						'caption' => $desc['displayName'],
-						'hint' => $desc['description'],
-						'onExecute' => 'javaScript:app.home.add',
-						'acceptedTypes' => $instance->accept_drop(),
+						'id'              => $portlet,
+						'caption'         => $desc['displayName'],
+						'hint'            => $desc['description'],
+						'appname'         => $appname,
+						'onExecute'       => 'javaScript:app.home.add',
+						'acceptedTypes'   => $instance->accept_drop(),
 						'allowOnMultiple' => $instance->accept_multiple()
 					);
 				}
@@ -566,6 +589,7 @@ class home_ui
 			else
 			{
 				$prefs->delete('home', $portlet_id);
+				$response->data([]);
 			}
 		}
 		else
@@ -594,7 +618,7 @@ class home_ui
 				$classname = substr($classname, 4);
 			}
 			$content = null;
-			$portlet = $this->get_portlet($portlet_id, $context, $content, $attributes, $full_exec);
+			$portlet = $this->get_portlet("home-index_portlets_" . $portlet_id, $context, $content, $attributes, $full_exec);
 
 			$context['class'] = get_class($portlet);
 			foreach($portlet->get_properties() as $property)
@@ -611,6 +635,10 @@ class home_ui
 
 			// Update client side
 			$update = array('attributes' => $attributes);
+			if($content && is_array($content))
+			{
+				$update['attributes'] = array_merge_recursive($update['attributes'], $content);
+			}
 
 			// New portlet?  Flag going straight to edit mode
 			if($add)

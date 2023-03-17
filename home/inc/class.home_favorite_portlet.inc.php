@@ -59,8 +59,6 @@ class home_favorite_portlet extends home_portlet
 	 */
 	public function __construct(Array &$context = array(), &$need_reload = false)
 	{
-		if (false) parent::__construct();
-
 		// Process dropped data (Should be [appname => <appname>, id => <favorite ID>]) into something useable
 		if($context['dropped_data'])
 		{
@@ -77,7 +75,7 @@ class home_favorite_portlet extends home_portlet
 			$need_reload = true;
 		}
 		// Favorite not set for new widgets created via context menu
-		if(!$context['favorite'])
+		if(!$context['favorite'] && !($context['width'] || $context['height']))
 		{
 			// Set initial size to 6x3, default is way too small
 			$context['width'] = max($context['width'], 6);
@@ -87,20 +85,18 @@ class home_favorite_portlet extends home_portlet
 		}
 
 		// Load and copy favorite
-		if($context['favorite'] && !is_array($context['favorite']))
+		if($context['appname'])
 		{
 			$favorites = Framework\Favorites::get_favorites($context['appname']);
-			$context['favorite'] = $favorites[$context['favorite']];
-			$need_reload = true;
 		}
 
-		$this->favorite = (array)$context['favorite'];
+		$this->favorite = (array)$favorites[$context['favorite'] ?: 'blank'];
 		$this->title = lang($context['appname']) . ': ' . $this->favorite['name'];
 		$this->context = $context;
 		if($this->favorite)
 		{
 			$this->nm_settings['favorite'] = $this->context['favorite'];
-			if(is_array($this->favorite['state']))
+			if(is_array($favorites[$context['favorite']]['state']))
 			{
 				$this->nm_settings += $this->favorite['state'];
 			}
@@ -122,6 +118,7 @@ class home_favorite_portlet extends home_portlet
 
 		$content = $this->context + array('nm' => $this->nm_settings);
 		$content['header_node'] = "home-index_{$id}_header";
+		unset($content['template']);
 		$sel_options = $content['sel_options'] ? $content['sel_options'] : array();
 		unset($content['sel_options']);
 		$etemplate->setElementAttribute('nm', 'template',$this->nm_settings['template']);
@@ -145,14 +142,55 @@ class home_favorite_portlet extends home_portlet
 
 	public static function process($content = array())
 	{
-		unset($content);	// not used, but required by function signature
+		unset($content);    // not used, but required by function signature
 
 		// We need to keep the template going, thanks.
-		Etemplate\Widget::setElementAttribute('','','');
+		Etemplate\Widget::setElementAttribute('', '', '');
 	}
 
-	public function get_actions(){
+	public function get_actions()
+	{
 		return array();
+	}
+
+	public function get_type()
+	{
+		return 'et2-portlet-favorite';
+	}
+
+	/**
+	 * Get a list of "Add" actions
+	 * @return array
+	 */
+	public function get_add_actions()
+	{
+		$desc = $this->get_description();
+		$actions = array();
+
+		// Add a list of favorites
+		if($this->context['appname'] && ($favorites = Framework\Favorites::get_favorites($this->context['appname'])))
+		{
+			foreach($favorites as $name => $favorite)
+			{
+				$actions[] = array(
+					'id'        => __CLASS__ . $name,
+					'caption'   => $name,
+					'onExecute' => 'javaScript:app.home.add'
+				);
+			}
+		}
+		else
+		{
+			$actions[] = array(
+				'id'              => __CLASS__,
+				'caption'         => lang('List'),
+				'hint'            => $desc['description'],
+				'onExecute'       => 'javaScript:app.home.add',
+				'acceptedTypes'   => $this->accept_drop(),
+				'allowOnMultiple' => $this->accept_multiple()
+			);
+		}
+		return $actions;
 	}
 
 	/**
@@ -193,15 +231,7 @@ class home_favorite_portlet extends home_portlet
 	public function get_properties()
 	{
 		$properties = parent::get_properties();
-		$favorites = Framework\Favorites::get_favorites($this->context['appname']);
-		$favorite_list = array();
-		foreach($favorites as $id => $favorite)
-		{
-			if($favorite)
-			{
-				$favorite_list[$id] = $favorite['name'];
-			}
-		}
+
 		$favorite = array(
 			'label'	=>	lang('Favorite'),
 			'name'	=>	'favorite',

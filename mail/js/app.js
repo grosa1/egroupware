@@ -671,7 +671,37 @@ app.classes.mail = AppJS.extend(
 						}
 						break;
 					case 'add':
+						const current_id = tree.getValue();
 						tree.refreshItem(0);	// refresh root
+						// ToDo: tree.refreshItem() and openItem() should return a promise
+						// need to wait tree is refreshed: current and new id are there AND current folder is selected again
+						const interval = window.setInterval(() => {
+							if (tree.getNode(_id) && tree.getNode(current_id))
+							{
+								if (!tree.getSelectedNode())
+								{
+									tree.reSelectItem(current_id);
+								}
+								else
+								{
+									window.clearInterval(interval);
+									// open new account
+									tree.openItem(_id, true);
+									// need to wait new folders are loaded AND current folder is selected again
+									const open_interval = window.setInterval(() => {
+										if (tree.getNode(_id + '::INBOX')) {
+											if (!tree.getSelectedNode()) {
+												tree.reSelectItem(current_id);
+											} else {
+												window.clearInterval(open_interval);
+												this.mail_changeFolder(_id + '::INBOX', tree, current_id);
+												tree.reSelectItem(_id + '::INBOX');
+											}
+										}
+									}, 200);
+								}
+							}
+						}, 200);
 						break;
 					default: // null
 				}
@@ -1017,8 +1047,19 @@ app.classes.mail = AppJS.extend(
 	 */
 	mail_disablePreviewArea: function(_value) {
 		var splitter = this.et2.getWidgetById('mailSplitter');
+		var previewPane = this.egw.preference('previewPane', 'mail');
 		// return if there's no splitter we maybe in mobile mode
-		if (typeof splitter == 'undefined' || splitter == null) return;
+		if (typeof splitter == 'undefined' || splitter == null || previewPane == 'vertical') return;
+		let dock = function(){
+			splitter.style.setProperty('--max','100%');
+			splitter.dock();
+		};
+		let undock = function ()
+		{
+			splitter.style.setProperty('--max','70%');
+			splitter.undock();
+		};
+
 		if(splitter.isDocked())
 		{
 			this.mail_previewAreaActive = false;
@@ -1027,15 +1068,15 @@ app.classes.mail = AppJS.extend(
 		//Dock the splitter always if we are browsing with mobile
 		if (_value==true)
 		{
-			if (this.mail_previewAreaActive) splitter.dock();
+			if (this.mail_previewAreaActive) dock();
 			this.mail_previewAreaActive = false;
 		}
 		else
 		{
 			if (!this.mail_previewAreaActive)
 			{
-				splitter.undock();
-				window.setTimeout(function(){splitter.left.trigger('resize.et2_split.mailSplitter');},200);
+				undock();
+				//window.setTimeout(function(){splitter.left.trigger('resize.et2_split.mailSplitter');},200);
 			}
 			this.mail_previewAreaActive = true;
 		}
@@ -1105,7 +1146,7 @@ app.classes.mail = AppJS.extend(
 						data.attachmentsBlockTitle = _data.length > 1 ? `+${_data.length-1}` : '';
 						// Update client cache to avoid resolving winmail.dat attachment again
 						egw.dataStoreUID(data.uid, data);
-						if (!egwIsMobile()) mailPreview.set_value({content:data});
+						if (!egwIsMobile() && mailPreview) mailPreview.set_value({content:data});
 					}
 					else
 					{
@@ -1187,24 +1228,28 @@ app.classes.mail = AppJS.extend(
 			sel_options.attachmentsBlock.actions = actions;
 		}
 
-		if (!egwIsMobile()) mailPreview.set_value({content:data, sel_options:sel_options});
+		if (!egwIsMobile() && mailPreview) mailPreview.set_value({content:data, sel_options:sel_options});
 
 		if (selected && selected.length>1)
 		{
 			// Leave if we're here and there is nothing selected, too many, or no data
 			if (attachmentsBlock)
 			{
-				attachmentsBlock.set_value({content:[]});
-				attachmentsBlock.set_class('previewAttachmentArea noContent mail_DisplayNone');
+				// check if the widget is attached before setting its content
+				if (attachmentsBlock.parentNode)
+				{
+					attachmentsBlock.set_value({content:[]});
+					attachmentsBlock.set_class('previewAttachmentArea noContent mail_DisplayNone');
+				}
 				var IframeHandle = this.et2.getWidgetById('messageIFRAME');
-				IframeHandle.set_src('about:blank');
+				if(IframeHandle) IframeHandle.set_src('about:blank');
 				this.mail_disablePreviewArea(true);
 			}
 			if (!egwIsMobile())return;
 		}
 
 		// Not applied to mobile preview
-		if (!egwIsMobile())
+		if (!egwIsMobile() && this.getPreviewPaneState())
 		{
 			// Blank first, so we don't show previous email while loading
 			var IframeHandle = this.et2.getWidgetById('messageIFRAME');

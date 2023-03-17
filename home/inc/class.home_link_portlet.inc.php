@@ -51,8 +51,6 @@ class home_link_portlet extends home_portlet
 	 */
 	public function __construct(Array &$context = array(), &$need_reload = false)
 	{
-		if (false) parent::__construct();
-
 		// Process dropped data into something useable
 		if($context['dropped_data'])
 		{
@@ -192,35 +190,6 @@ class home_link_portlet extends home_portlet
 	}
 
 	/**
-	 * Return a list of settings to customize the portlet.
-	 *
-	 * Settings should be in the same style as for preferences.  It is OK to return an empty array
-	 * for no customizable settings.
-	 *
-	 * These should be already translated, no further Api\Translation will be done.
-	 *
-	 * @see preferences/inc/class.preferences_settings.inc.php
-	 * @return Array of settings.  Each setting should have the following keys:
-	 * - name: Internal reference
-	 * - type: Widget type for editing
-	 * - label: Human name
-	 * - help: Description of the setting, and what it does
-	 * - default: Default value, for when it's not set yet
-	 */
-	public function get_properties()
-	{
-		$properties = parent::get_properties();
-
-		$properties[] = array(
-				'name'	=>	'entry',
-				'type'	=>	'link-entry',
-				'label'	=>	lang('Entry'),
-				'size' => ''
-		);
-		return $properties;
-	}
-
-	/**
 	 * Return a list of allowable actions for the portlet.
 	 *
 	 * These actions will be merged with the default porlet actions.
@@ -245,6 +214,7 @@ class home_link_portlet extends home_portlet
 
 		return $actions;
 	}
+
 	/**
 	 * This portlet accepts files and links
 	 *
@@ -252,6 +222,11 @@ class home_link_portlet extends home_portlet
 	 */
 	public function accept_drop()
 	{
-		return array('file','link');
+		return array('file', 'link');
+	}
+
+	public function get_type()
+	{
+		return "et2-portlet-link";
 	}
 }

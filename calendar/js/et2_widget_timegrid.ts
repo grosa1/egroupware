@@ -30,6 +30,7 @@ import {EGW_AI_DRAG_ENTER, EGW_AI_DRAG_OUT} from "../../api/js/egw_action/egw_ac
 import {formatDate, formatTime, parseTime} from "../../api/js/etemplate/Et2Date/Et2Date";
 import interact from "@interactjs/interactjs/index";
 import type {InteractEvent} from "@interactjs/core/InteractEvent";
+import {CalendarApp} from "./app";
 
 /**
  * Class which implements the "calendar-timegrid" XET-Tag for displaying a span of days
@@ -2295,10 +2296,7 @@ export class et2_calendar_timegrid extends et2_calendar_view implements et2_IDet
 		// Take the whole tab height, or home portlet
 		if(this.getInstanceManager().app === 'home')
 		{
-			var height = jQuery(this.getParent().getDOMNode(this)).parentsUntil('.et2_portlet').last().parent().innerHeight();
-
-			// Allow for portlet header
-			height -= jQuery('.ui-widget-header',this.div.parents('.egw_fw_ui_tab_content')).outerHeight(true);
+			var height = jQuery(this.getParent().getDOMNode(this)).parentsUntil('et2-portlet-calendar').last().innerHeight();
 		}
 		else
 		{
@@ -2323,7 +2321,7 @@ export class et2_calendar_timegrid extends et2_calendar_view implements et2_IDet
 
 		if(this.getInstanceManager().app === 'home')
 		{
-			var modify_node = jQuery(this.getParent().getDOMNode(this)).parentsUntil('.et2_portlet').last();
+			var modify_node = jQuery(this.getParent().getDOMNode(this)).parentsUntil('et2-portlet-calendar').last();
 		}
 		else
 		{

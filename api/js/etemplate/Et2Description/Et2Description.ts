@@ -33,10 +33,11 @@ export class Et2Description extends Et2Widget(LitElement) implements et2_IDetach
 				flex: 0 1 auto !important;
 			}
 			label {display: contents;}
-			:host a {
+			::slotted(a) {
 				cursor: pointer;
 				color: #26537c;
 				text-decoration: none;
+			  	display: inherit;
 			}`
 		];
 	}
@@ -249,7 +250,7 @@ export class Et2Description extends Et2Widget(LitElement) implements et2_IDetach
 
 	getDetachedAttributes(attrs)
 	{
-		attrs.push("id", "value", "class", "href");
+		attrs.push("id", "label", "value", "class", "href");
 	}
 
 	getDetachedNodes() : HTMLElement[]

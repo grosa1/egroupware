@@ -72,7 +72,7 @@ import {egwIsMobile} from "../egw_action/egw_action_common.js";
 import {Et2Dialog} from "./Et2Dialog/Et2Dialog";
 import {Et2Select} from "./Et2Select/Et2Select";
 import {loadWebComponent} from "./Et2Widget/Et2Widget";
-import {Et2AccountFilterHeader} from "./Nextmatch/Headers/AccountFilterHeader";
+import {Et2AccountFilterHeader} from "./Et2Nextmatch/Headers/AccountFilterHeader";
 import {Et2SelectCategory} from "./Et2Select/Et2SelectCategory";
 import {Et2Searchbox} from "./Et2Textbox/Et2Searchbox";
 
@@ -739,7 +739,24 @@ export class et2_nextmatch extends et2_DOMWidget implements et2_IResizeable, et2
 			}
 		}
 
-		this.update_in_progress = false;
+		// Wait a bit.  header.setFilters() can cause webComponents to update, so we want to wait for that
+		let wait = [];
+		this.iterateOver(w =>
+		{
+			if(typeof w.updateComplete != "undefined")
+			{
+				wait.push(w.updateComplete);
+			}
+		}, this);
+		setTimeout(() =>
+		{
+			// It needs a little longer than just the updateComplete, not sure why.
+			// Turning it off too soon causes problems with app.infolog.filter2_change
+			Promise.allSettled(wait).then(() =>
+			{
+				this.update_in_progress = false;
+			});
+		}, 100);
 	}
 
 	/**
