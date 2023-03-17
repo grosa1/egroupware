@@ -315,7 +315,7 @@ egwAction.prototype.getActionsByAttr = function(_attr, _val)
  * @param {string} _type
  * @param {string} _id
  * @param {string} _caption
- * @param {string] _iconUrl
+ * @param {string} _iconUrl
  * @param {(string|function)} _onExecute
  * @param {boolean} _allowOnMultiple
  */
@@ -1836,7 +1836,8 @@ egwActionObject.prototype.setAllSelected = function(_selected, _informParent)
 		{
 			this.parent.updateSelectedChildren(this, _selected);
 		}
-		if(this.parent.data && this.parent.data.keyboard_select)
+		//might not have a parent
+		if(this.parent?.data && this.parent.data.keyboard_select)
 		{
 			this.parent.data.keyboard_select = false;
 		}
