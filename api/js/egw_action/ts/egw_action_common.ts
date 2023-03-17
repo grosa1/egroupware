@@ -305,6 +305,15 @@ export class egwFnct {
 
     /**
      * Sets the function/return value for the exec function
+     * egw_action hints that value has to be on of 3:
+     * 1. _value may be a string with the word "javaScript:" prefixed. The function
+     *       which is specified behind the colon and which has to be in the global scope
+     *       will be executed.
+     *    2. _value may be a boolean, which specifies whether the external onExecute handler
+     *       (passed as "_handler" in the constructor) will be used.
+     *    3. _value may be a JS function which will then be called.
+     *
+     *    TODO check if there should be other options
      */
     public setValue(_value: any) {
         this.value = null;
