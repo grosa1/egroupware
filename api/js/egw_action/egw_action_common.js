@@ -15,10 +15,10 @@ import {EGW_AO_SHIFT_STATE_BLOCK, EGW_AO_SHIFT_STATE_MULTI, EGW_AO_SHIFT_STATE_N
  * exists and if corresponding setter functions are available. Properties starting
  * with "_" are ignored.
  *
- * @param object _data may be an object with data that will be stored inside the
+ * @param {object} _data may be an object with data that will be stored inside the
  * 	given object.
- * @param object _obj is the object where the data will be stored.
- * @param mixed _setterOnly false: store everything, true: only store when setter exists, "data" store rest in data property
+ * @param {object} _obj is the object where the data will be stored.
+ * @param {boolean|"data"} _setterOnly false: store everything, true: only store when setter exists, "data" store rest in data property
  */
 export function egwActionStoreJSON(_data, _obj, _setterOnly)
 {
