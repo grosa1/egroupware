@@ -26,20 +26,18 @@ import {
 	EGW_KEY_PAGE_DOWN,
 	EGW_AO_EXEC_THIS,
 	EGW_AO_EXEC_SELECTED,
-	EGW_KEY_A, EGW_KEY_SPACE
+	EGW_KEY_A,
+	EGW_KEY_SPACE
 } from './egw_action_constants';
 import {
-	egwFnct,
-	egwActionStoreJSON,
-	egwBitIsSet,
-	egwQueueCallback,
-	egwSetBit,
-	egwObjectLength
+	EgwFnct, egwActionStoreJSON, egwBitIsSet, egwQueueCallback, egwSetBit, egwObjectLength
 } from './egw_action_common';
 import '../egw_action_popup.js';
 import "../egw_action_dragdrop.js";
 import "../egw_menu_dhtmlx.js";
-import {egw} from "../../jsapi/egw_global";
+import {app, egw} from "../../jsapi/egw_global";
+import {Et2Dialog} from "../../etemplate/Et2Dialog/Et2Dialog";
+import {nm_action} from "../../etemplate/et2_extension_nextmatch_actions";
 
 //TODO check
 //global window interface augmentation
@@ -49,16 +47,14 @@ import {egw} from "../../jsapi/egw_global";
  */
 type EgwActionClasses = {
 	default: EgwActionClassData,//
-	actionManager: EgwActionClassData,
-	drag: EgwActionClassData,
-	drop: EgwActionClassData,
-	popup: EgwActionClassData
+	actionManager: EgwActionClassData, drag: EgwActionClassData, drop: EgwActionClassData, popup: EgwActionClassData
 }
 /**
  * holds the constructor and implementation of an EgwActionClass
  */
 type EgwActionClassData = {
-	actionConstructor: Function,//EgwAction["constructor"],
+	//type EgwAction["constructor"],
+	actionConstructor: Function,
 	implementation: any
 }
 declare global
@@ -67,6 +63,8 @@ declare global
 	{
 		_egwActionClasses: EgwActionClasses;
 		egw: Function //egw returns instance of client side api -- set in egw_core.js
+		egwIsMobile: () => boolean // set in egw_action_commons.ts
+		nm_action: typeof nm_action
 	}
 }
 /**
@@ -104,7 +102,7 @@ export function egw_getActionManager(_id?: null, _create?: boolean, _search_dept
 	let res = egw_globalActionManager;
 	if (egw_globalActionManager == null)
 	{
-		res = egw_globalActionManager = new egwActionManager();
+		res = egw_globalActionManager = new EgwActionManager();
 	}
 
 	// Check whether the sub-action manager exists, if not, create it
@@ -132,24 +130,14 @@ export function egw_getActionManager(_id?: null, _create?: boolean, _search_dept
  * @param {number} [_search_depth=Infinite] How deep into existing action children
  *    to search.
  */
-export function egw_getObjectManager(_id, _create, _search_depth)
+export function egw_getObjectManager(_id, _create = true, _search_depth = Number.MAX_VALUE)
 {
-	if (typeof _create == "undefined")
-	{
-		_create = true;
-	}
-	if (typeof _search_depth == "undefined")
-	{
-		_search_depth = Number.MAX_VALUE;
-	}
 
 	// Check whether the global object manager exists
 	var res = egw_globalObjectManager;
 	if (res == null)
 	{
-		res = egw_globalObjectManager =
-			new egwActionObjectManager("_egwGlobalObjectManager",
-				egw_getActionManager());
+		res = egw_globalObjectManager = new EgwActionObjectManager("_egwGlobalObjectManager", egw_getActionManager());
 	}
 
 	// Check whether the sub-object manager exists, if not, create it
@@ -158,8 +146,7 @@ export function egw_getObjectManager(_id, _create, _search_depth)
 		res = egw_globalObjectManager.getObjectById(_id, _search_depth);
 		if (res == null && _create)
 		{
-			res = new egwActionObjectManager(_id,
-				egw_getActionManager(_id, true, _search_depth));
+			res = new EgwActionObjectManager(_id, egw_getActionManager(_id, true, _search_depth));
 			egw_globalObjectManager.addObject(res);
 		}
 	}
@@ -183,7 +170,7 @@ export function egw_getAppObjectManager(_create, _appName)
  * Returns the action manager for the current application
  *
  * @param {boolean} _create
- * @return {egwActionManager}
+ * @return {EgwActionManager}
  */
 // this function is never used
 // export function egw_getAppActionManager(_create) {
@@ -215,19 +202,15 @@ export function egw_getAppObjectManager(_create, _appName)
 if (typeof window._egwActionClasses == "undefined")
 {
 	window._egwActionClasses = {
-		actionManager: undefined,
-		default: undefined,
-		drag: undefined,
-		drop: undefined,
-		popup: undefined
+		actionManager: undefined, default: undefined, drag: undefined, drop: undefined, popup: undefined
 	};
 }
 
-//Classes have to register themselves on creation
-window._egwActionClasses["actionManager"] = {
-	"actionConstructor": egwActionManager,
-	"implementation": null
-};
+//Classes have to register themselves on creation TODO do this after class creation
+// window._egwActionClasses["actionManager"] = {
+// 	"actionConstructor": egwActionManager,
+// 	"implementation": null
+// };
 
 /**
  * Constructor for EgwAction object
@@ -269,8 +252,8 @@ export class EgwAction
 		this.allowOnMultiple = _value
 	}
 
-	private readonly _enabled: egwFnct;
-	public get enabled(): egwFnct
+	private readonly _enabled: EgwFnct;
+	public get enabled(): EgwFnct
 	{
 		return this._enabled
 	}
@@ -282,15 +265,24 @@ export class EgwAction
 
 	public hideOnDisabled = false;
 
-	public data = {}; // Data which can be freely assigned to the action
+	public data: any = {}; // Data which can be freely assigned to the action
 
 	protected type = "default"; //All derived classes have to override this!
-	protected canHaveChildren = false; //Has to be overwritten by inheriting action classes
-	// this is not bool all the time. Can be ['popup'] e.g.
+	protected canHaveChildren: boolean | string[] = false; //Has to be overwritten by inheriting action classes
+	// this is not bool all the time. Can be ['popup'] e.g. List of egwActionClasses that are allowed to have children?
 	private readonly parent: EgwAction;
 	private children: EgwAction[] = []; //i guess
 
-	private readonly onExecute = new egwFnct(this, null, []);
+	private readonly onExecute = new EgwFnct(this, null, []);
+
+	/**
+	 * Set to either a confirmation prompt, or TRUE to indicate that this action
+	 * cares about large selections and to ask the confirmation prompt(s)
+	 *
+	 * --set in egw_action_popup--
+	 * @param {String|Boolean} _value
+	 */
+	public confirm_mass_selection: string | boolean = undefined
 
 	/**
 	 * The set_onExecute function is the setter function for the onExecute event of
@@ -359,7 +351,7 @@ export class EgwAction
 			this.onExecute.setValue(_onExecute)
 		}
 		this.allowOnMultiple = _allowOnMultiple;
-		this._enabled = new egwFnct(this, true);
+		this._enabled = new EgwFnct(this, true);
 
 	}
 
@@ -423,7 +415,7 @@ export class EgwAction
 	 * @param _val attribute value
 	 * @return array
 	 */
-	public getActionsByAttr(_attr: string | number, _val: any)
+	public getActionsByAttr(_attr: string | number, _val: any = undefined)
 	{
 		let _actions = [];
 
@@ -501,7 +493,7 @@ export class EgwAction
 			probably not because it changes on runtime
 			 */
 			const localEgw = window.egw(_app);
-
+			//replaced jQuery calls
 			if (Array.isArray(_actions))
 			{
 				//_actions is now an object for sure
@@ -515,6 +507,7 @@ export class EgwAction
 
 				if (typeof elem == "string")
 				{
+					//changes type of elem to Object {caption:string}
 					_actions[i] = elem = {caption: elem};
 				}
 				if (typeof elem == "object") // isn't this always true because of step above? Yes if elem was a string before
@@ -538,11 +531,7 @@ export class EgwAction
 					if (elem.id == "delete" && typeof elem.shortcut == "undefined")
 					{
 						elem.shortcut = {
-							keyCode: 46,
-							shift: false,
-							ctrl: false,
-							alt: false,
-							caption: localEgw.lang('Del')
+							keyCode: 46, shift: false, ctrl: false, alt: false, caption: localEgw.lang('Del')
 						};
 					}
 
@@ -554,12 +543,12 @@ export class EgwAction
 					}
 					delete elem.no_lang;
 
-					// translate confirm messages
-					for (var attr in {confirm: '', confirm_multiple: ''})
+					// translate confirm messages and place '?' at the end iff not there yet
+					for (const attr in {confirm: '', confirm_multiple: ''})
 					{
 						if (typeof elem[attr] == "string")
 						{
-							elem[attr] = localEgw.lang(elem[attr]) + (elem[attr].substr(-1) != '?' ? '?' : '');
+							elem[attr] = localEgw.lang(elem[attr]) + ((elem[attr].substr(-1) != '?') ? '?' : '');
 						}
 					}
 
@@ -580,28 +569,33 @@ export class EgwAction
 
 					//Check whether the action already exists, and if no, add it to the
 					//actions list
-					var action = this.getActionById(elem.id);
+					let action = this.getActionById(elem.id);
 					if (!action)
 					{
+						//elem will be popup on default
 						if (typeof elem.type == "undefined")
+						{
 							elem.type = "popup";
+						}
 
-						var constructor = null;
+						let constructor = null;
 
 						// Check whether the given type is inside the "canHaveChildren"
-						// array
+						// array // here can have children is used as array where possible types of children are stored
 						if (this.canHaveChildren !== true && this.canHaveChildren.indexOf(elem.type) == -1)
 						{
 							throw "This child type '" + elem.type + "' is not allowed!";
 						}
 
-						if (typeof _egwActionClasses[elem.type] != "undefined")
-							constructor = _egwActionClasses[elem.type].actionConstructor;
+						if (typeof window._egwActionClasses[elem.type] != "undefined")
+						{
+							constructor = window._egwActionClasses[elem.type].actionConstructor;
+						} else
+						{
+							throw "Given action type \"" + elem.type + "\" not registered, because type does not exist";
+						}
 
-						if (typeof constructor == "function" && constructor)
-							action = new constructor(this, elem.id);
-						else
-							throw "Given action type \"" + elem.type + "\" not registered.";
+						if (typeof constructor == "function" && constructor) action = new constructor(this, elem.id); else throw "Given action type \"" + elem.type + "\" not registered.";
 
 						this.children.push(action);
 					}
@@ -629,16 +623,19 @@ export class EgwAction
 	 * @param _target egwActionObject object, gets called for every object in _senders
 	 * @returns boolean true if none has disableClass, false otherwise
 	 */
-	private not_disableClass(_action, _senders, _target)
+	private not_disableClass(_action: EgwAction, _senders: EgwActionObject[], _target: EgwActionObject)
 	{
-		if (_target.iface.getDOMNode())
+		if (_target.interface.getDOMNode())
 		{
-			return !jQuery(_target.iface.getDOMNode()).hasClass(_action.data.disableClass);
+			//TODO check if this is correct jQuery replacement
+			return !(_target.interface.getDOMNode()).classList.contains(_action.data.disableClass);
 		} else if (_target.id)
 		{
+			//TODO when do we even end up here
+
 			// Checking on a something that doesn't have a DOM node, like a nm row
 			// that's not currently rendered
-			var data = egw.dataGetUIDdata(_target.id);
+			const data = egw.dataGetUIDdata(_target.id);
 			if (data && data.data && data.data.class)
 			{
 				return -1 === data.data.class.split(' ').indexOf(_action.data.disableClass);
@@ -654,20 +651,21 @@ export class EgwAction
 	 * @param _target egwActionObject object, gets called for every object in _senders
 	 * @returns boolean true if none has disableClass, false otherwise
 	 */
-	private enableClass(_action, _senders, _target)
+	//TODO senders is never used in function body??
+	private enableClass(_action: EgwAction, _senders: EgwActionObject[], _target: EgwActionObject)
 	{
 		if (typeof _target == 'undefined')
 		{
 			return false;
-		} else if (_target.iface.getDOMNode())
+		} else if (_target.interface.getDOMNode())
 		{
-			return jQuery(_target.iface.getDOMNode()).hasClass(_action.data.enableClass);
+			return (_target.interface.getDOMNode()).classList.contains(_action.data.enableClass);
 		} else if (_target.id)
 		{
 			// Checking on a something that doesn't have a DOM node, like a nm row
 			// that's not currently rendered.  Not as good as an actual DOM node check
 			// since things can get missed, but better than nothing.
-			var data = egw.dataGetUIDdata(_target.id);
+			const data = egw.dataGetUIDdata(_target.id);
 			if (data && data.data && data.data.class)
 			{
 				return -1 !== data.data.class.split(' ').indexOf(_action.data.enableClass);
@@ -676,14 +674,14 @@ export class EgwAction
 	};
 
 	/**
-	 * Enable an _action, if it matches a given regular expresstion in _action.data.enableId
+	 * Enable an _action, if it matches a given regular expression in _action.data.enableId
 	 *
 	 * @param _action EgwAction object, we use _action.data.enableId to check
 	 * @param _senders array of egwActionObject objects
 	 * @param _target egwActionObject object, gets called for every object in _senders
 	 * @returns boolean true if _target.id matches _action.data.enableId
 	 */
-	private enableId(_action, _senders, _target)
+	private enableId(_action: EgwAction, _senders: EgwActionObject[], _target: EgwActionObject)
 	{
 		if (typeof _action.data.enableId == 'string')
 		{
@@ -693,12 +691,13 @@ export class EgwAction
 	};
 
 	/**
-	 * Applys the same onExecute handler to all actions which don't have an execute
+	 * Applies the same onExecute handler to all actions which don't have an execute
 	 * handler set.
 	 *
 	 * @param {(string|function)} _value
 	 */
-	private setDefaultExecute = function (_value) {
+	private setDefaultExecute(_value: string | Function): void
+	{
 		// Check whether the onExecute handler of this action should be set
 		if (this.type != "actionManager" && !this.onExecute.hasHandler())
 		{
@@ -709,9 +708,9 @@ export class EgwAction
 		// Apply the value to all children
 		if (this.canHaveChildren)
 		{
-			for (var i = 0; i < this.children.length; i++)
+			for (const elem of this.children)
 			{
-				this.children[i].setDefaultExecute(_value);
+				elem.setDefaultExecute(_value);
 			}
 		}
 	};
@@ -720,14 +719,10 @@ export class EgwAction
 	 * Executes this action by using the method specified in the onExecute setter.
 	 *
 	 * @param {array} _senders array with references to the objects which caused the action
-	 * @param {object} _target is an optional parameter which may represent e.g. an drag drop target
+	 * @param {object} _target is an optional parameter which may represent e.g. a drag drop target
 	 */
-	private execute = function (_senders, _target) {
-		if (typeof _target === "undefined")
-		{
-			_target = null;
-		}
-
+	execute(_senders, _target = null): any
+	{
 		if (!this._check_confirm_mass_selections(_senders, _target))
 		{
 			return this._check_confirm(_senders, _target);
@@ -748,45 +743,50 @@ export class EgwAction
 	 * @param {type} _target
 	 * @returns {Boolean}
 	 */
-	private _check_confirm_mass_selections = function (_senders, _target) {
-		var obj_manager = egw_getObjectManager(this.getManager().parent.id, false);
+	private _check_confirm_mass_selections(_senders, _target)
+	{
+		const obj_manager: EgwActionObject = egw_getObjectManager(this.getManager().parent.id, false);
 		if (!obj_manager)
 		{
 			return false;
 		}
 
 		// Action needs to care about mass selection - check for parent that cares too
-		var confirm_mass_needed = false;
-		var action = this;
+		let confirm_mass_needed = false;
+		let action: EgwAction = this;
 		while (action && action !== obj_manager.manager && !confirm_mass_needed)
 		{
-			confirm_mass_needed = action.confirm_mass_selection;
+			confirm_mass_needed = !!action.confirm_mass_selection;
 			action = action.parent;
 		}
 		if (!confirm_mass_needed) return false;
 
 		// Check for confirm mass selection checkboxes
-		var confirm_mass_selections = obj_manager.manager.getActionsByAttr("confirm_mass_selection");
+		const confirm_mass_selections = obj_manager.manager.getActionsByAttr("confirm_mass_selection");
 		confirm_mass_needed = _senders.length > 20;
-		var self = this;
+		//no longer needed because of '=>' notation
+		//const self = this;
 
 		// Find & show prompt
-		for (var i = 0; confirm_mass_needed && i < confirm_mass_selections.length; i++)
+		for (let i = 0; confirm_mass_needed && i < confirm_mass_selections.length; i++)
 		{
-			var check = confirm_mass_selections[i];
-			if (check.checkbox === false || check.checked === true) continue;
+			const check = confirm_mass_selections[i];
+			if (check.checkbox === false || check.checked === true)
+			{
+				continue
+			}
 
 			// Show the mass selection prompt
-			var msg = egw.lang(check.confirm_mass_selection, obj_manager.getAllSelected() ? egw.lang('all') : _senders.length);
-			var callback = function (_button) {
+			const msg = egw.lang(check.confirm_mass_selection, obj_manager.getAllSelected() ? egw.lang('all') : _senders.length);
+			const callback = (_button) => {
 				// YES = unchecked, NO = checked
 				check.set_checked(_button === Et2Dialog.NO_BUTTON);
 				if (_button !== Et2Dialog.CANCEL_BUTTON)
 				{
-					self._check_confirm(_senders, _target);
+					this._check_confirm(_senders, _target);
 				}
 			};
-			Et2Dialog.show_dialog(callback, msg, self.data.hint, {}, Et2Dialog.BUTTONS_YES_NO_CANCEL, Et2Dialog.QUESTION_MESSAGE);
+			Et2Dialog.show_dialog(callback, msg, this.data.hint, {}, Et2Dialog.BUTTONS_YES_NO_CANCEL, Et2Dialog.QUESTION_MESSAGE);
 			return true;
 		}
 		return false;
@@ -796,12 +796,13 @@ export class EgwAction
 	/**
 	 * Check to see if action needs to be confirmed by user before we do it
 	 */
-	private _check_confirm = function (_senders, _target) {
+	private _check_confirm(_senders, _target)
+	{
 		// check if actions needs to be confirmed first
-		if (this.data && (this.data.confirm || this.data.confirm_multiple) && this.onExecute.fnct != window.nm_action &&
-			typeof Et2Dialog != 'undefined')	// let old eTemplate run it's own confirmation from nextmatch_action.js
+		if (this.data && (this.data.confirm || this.data.confirm_multiple) &&
+			this.onExecute.functionToPerform != window.nm_action && typeof Et2Dialog != 'undefined')	// let old eTemplate run its own confirmation from nextmatch_action.js
 		{
-			var msg = this.data.confirm || '';
+			let msg = this.data.confirm || '';
 			if (_senders.length > 1)
 			{
 				if (this.data.confirm_multiple)
@@ -809,36 +810,151 @@ export class EgwAction
 					msg = this.data.confirm_multiple;
 				}
 				// check if we have all rows selected
-				var obj_manager = egw_getObjectManager(this.getManager().parent.id, false);
+				const obj_manager = egw_getObjectManager(this.getManager().parent.id, false);
 				if (obj_manager && obj_manager.getAllSelected())
 				{
 					msg += "\n\n" + egw().lang('Attention: action will be applied to all rows, not only visible ones!');
 				}
 			}
-			var self = this;
+			//no longer needed because of '=>' notation
+			//var self = this;
 			if (msg.trim().length > 0)
 			{
 				if (this.data.policy_confirmation && egw.app('policy'))
 				{
-					egw.includeJS(egw.link('/policy/js/app.min.js'), function () {
-						if (typeof app.policy === 'undefined' || typeof app.policy.confirm === 'undefined')
-						{
-							app.policy = new app.classes.policy();
+					//TODO how to use 'es6 import statement: Promise.all([].concat(_jsFiles).map((src)=>import(_prefix+src))).then(...)'
+					egw.includeJS(egw.link('/policy/js/app.min.js'), () => {
+							if (typeof app.policy === 'undefined' || typeof app.policy.confirm === 'undefined')
+							{
+								app.policy = new app.classes.policy();
+							}
+							app.policy.confirm(this, _senders, _target);
 						}
-						app.policy.confirm(self, _senders, _target);
-					});
+					);
 					return;
 				}
-				Et2Dialog.show_dialog(function (_button) {
+				Et2Dialog.show_dialog((_button) => {
 					if (_button == Et2Dialog.YES_BUTTON)
 					{
-						return self.onExecute.exec(self, _senders, _target);
+						return this.onExecute.exec(this, _senders, _target);
 					}
-				}, msg, self.data.hint, {}, Et2Dialog.BUTTONS_YES_NO, Et2Dialog.QUESTION_MESSAGE);
+				}, msg, this.data.hint, {}, Et2Dialog.BUTTONS_YES_NO, Et2Dialog.QUESTION_MESSAGE);
 				return;
 			}
 		}
 		return this.onExecute.exec(this, _senders, _target);
+	};
+
+
+	private updateAction(_data: Object)
+	{
+		egwActionStoreJSON(_data, this, "data")
+	}
+
+	/**
+	 * Returns the parent action manager
+	 */
+	private getManager(): EgwAction
+	{
+		if (this.type == "actionManager")
+		{
+			return this;
+		} else if (this.parent)
+		{
+			return this.parent.getManager();
+		} else
+		{
+			return null;
+		}
+	}
+
+
+	/**
+	 * The appendToGraph function generates an action tree which automatically contains
+	 * all parent elements. If the appendToGraph function is called for a
+	 *
+	 * @param {not an array} _tree contains the tree structure - pass an object containing
+	 *    the empty array "root" to this function {"root": []}. The result will be stored in
+	 *    this array.
+	 * @param {boolean} _addChildren is used internally to prevent parent elements from
+	 *    adding their children automatically to the tree.
+	 */
+	private appendToTree(_tree: any, _addChildren: boolean)
+	{
+		let _addParent = false;
+		if (typeof _addChildren == "undefined")
+		{
+			_addChildren = true;
+		}
+
+		if (typeof _addParent == "undefined")
+		{
+			_addParent = true;
+		}
+
+		// Preset some variables
+		var root = _tree.root;
+		var parent_cntr = null;
+		var cntr = {
+			"action": this, "children": []
+		};
+
+
+		if (this.parent && this.type != "actionManager")
+		{
+			// Check whether the parent container has already been added to the tree
+			parent_cntr = _egwActionTreeContains(root, this.parent);
+
+			if (!parent_cntr)
+			{
+				parent_cntr = this.parent.appendToTree(_tree, false);
+			}
+
+			// Check whether this element has already been added to the parent container
+			var added = false;
+			for (var i = 0; i < parent_cntr.children.length; i++)
+			{
+				if (parent_cntr.children[i].action == this)
+				{
+					cntr = parent_cntr.children[i];
+					added = true;
+					break;
+				}
+			}
+
+			if (!added)
+			{
+				parent_cntr.children.push(cntr);
+			}
+		} else
+		{
+			var added = false;
+			for (var i = 0; i < root.length; i++)
+			{
+				if (root[i].action == this)
+				{
+					cntr = root[i];
+					added = true;
+					break;
+				}
+			}
+
+			if (!added)
+			{
+				// Add this element to the root if it has no parent
+				root.push(cntr);
+			}
+		}
+
+		if (_addChildren)
+		{
+			for (var i = 0; i < this.children.length; i++)
+			{
+				this.children[i].appendToTree(_tree, true);
+			}
+		}
+
+		return cntr;
 	};
 
 
@@ -848,8 +964,7 @@ export class EgwAction
 // Do this for all classes extending EgwAction
 (() => {
 	window._egwActionClasses["default"] = {
-		"actionConstructor": EgwAction.constructor,
-		"implementation": null
+		"actionConstructor": EgwAction.constructor, "implementation": null
 	};
 })()
 
@@ -875,110 +990,6 @@ function _egwActionTreeContains(_tree, _elem)
 	return null;
 }
 
-/**
- * The appendToGraph function generates an action tree which automatically contains
- * all parent elements. If the appendToGraph function is called for a
- *
- * @param {array} _tree contains the tree structure - pass an object containing
- *    the empty array "root" to this function {"root": []}. The result will be stored in
- *    this array.
- * @param {boolean} _addChildren is used internally to prevent parent elements from
- *    adding their children automatically to the tree.
- */
-EgwAction.prototype.appendToTree = function (_tree, _addChildren) {
-	let _addParent = false;
-	if (typeof _addChildren == "undefined")
-	{
-		_addChildren = true;
-	}
-
-	if (typeof _addParent == "undefined")
-	{
-		_addParent = true;
-	}
-
-	// Preset some variables
-	var root = _tree.root;
-	var parent_cntr = null;
-	var cntr = {
-		"action": this,
-		"children": []
-	};
-
-
-	if (this.parent && this.type != "actionManager")
-	{
-		// Check whether the parent container has already been added to the tree
-		parent_cntr = _egwActionTreeContains(root, this.parent);
-
-		if (!parent_cntr)
-		{
-			parent_cntr = this.parent.appendToTree(_tree, false);
-		}
-
-		// Check whether this element has already been added to the parent container
-		var added = false;
-		for (var i = 0; i < parent_cntr.children.length; i++)
-		{
-			if (parent_cntr.children[i].action == this)
-			{
-				cntr = parent_cntr.children[i];
-				added = true;
-				break;
-			}
-		}
-
-		if (!added)
-		{
-			parent_cntr.children.push(cntr);
-		}
-	} else
-	{
-		var added = false;
-		for (var i = 0; i < root.length; i++)
-		{
-			if (root[i].action == this)
-			{
-				cntr = root[i];
-				added = true;
-				break;
-			}
-		}
-
-		if (!added)
-		{
-			// Add this element to the root if it has no parent
-			root.push(cntr);
-		}
-	}
-
-	if (_addChildren)
-	{
-		for (var i = 0; i < this.children.length; i++)
-		{
-			this.children[i].appendToTree(_tree, true);
-		}
-	}
-
-	return cntr;
-};
-
-/**
- * Returns the parent action manager
- */
-EgwAction.prototype.getManager = function () {
-	if (this.type == "actionManager")
-	{
-		return this;
-	} else if (this.parent)
-	{
-		return this.parent.getManager();
-	} else
-	{
-		return null;
-	}
-};
-
 
 /** egwActionManager Object **/
 
@@ -988,9 +999,9 @@ EgwAction.prototype.getManager = function () {
  *
  * @param {EgwAction} _parent
  * @param {string} _id
- * @return {egwActionManager}
+ * @return {EgwActionManager}
  */
-export class egwActionManager extends EgwAction
+export class EgwActionManager extends EgwAction
 {
 	constructor(_parent = null, _id = "false")
 	{
@@ -1027,7 +1038,7 @@ interface egwActionImplementation
 	 * @returns {boolean} true if the Action had been successfully registered, false if it
 	 *    had not.
 	 */
-	registerAction: (_actionObjectInterface: egwActionObjectInterface, _triggerCallback: Function, _context: object) => boolean;
+	registerAction: (_actionObjectInterface: EgwActionObjectInterface, _triggerCallback: Function, _context: object) => boolean;
 	/**
 	 * Unregister action will be called before an actionObjectInterface is destroyed,
 	 * which gives the egwActionImplementation the opportunity to remove the previously
@@ -1037,7 +1048,7 @@ interface egwActionImplementation
 	 * @returns true if the Action had been successfully unregistered, false if it
 	 *    had not.
 	 */
-	unregisterAction: (_actionObjectInterface: egwActionObjectInterface) => boolean;
+	unregisterAction: (_actionObjectInterface: EgwActionObjectInterface) => boolean;
 	executeImplementation: (_context: any, _selected: any, _links: any) => any;
 	type: string;
 }
@@ -1059,9 +1070,9 @@ export class egwActionLink
 	visible = true;
 	private _actionId = "";
 	actionObj = null;
-	manager: egwActionManager;
+	manager: EgwActionManager;
 
-	constructor(_manager: egwActionManager)
+	constructor(_manager: EgwActionManager)
 	{
 		this.manager = _manager;
 	}
@@ -1081,8 +1092,7 @@ export class egwActionLink
 		this._actionId = _value;
 		this.actionObj = this.manager.getActionById(_value)
 
-		if (!this.actionObj)
-			throw "Action object with id '" + _value + "' does not exist!";
+		if (!this.actionObj) throw "Action object with id '" + _value + "' does not exist!";
 	};
 }
 
@@ -1096,7 +1106,7 @@ export class egwActionLink
  * @param {egwActionObject} _parent is the parent object in the hirachy. This may be set to NULL
  * @param {egwActionObjectInterface} _iface is the egwActionObjectInterface which connects the object
  *    to the outer world.
- * @param {egwActionManager} _manager is the action manager this object is connected to
+ * @param {EgwActionManager} _manager is the action manager this object is connected to
  *    this object to the DOM tree. If the _manager isn't supplied, the parent manager
  *    is taken.
  * @param {number} _flags a set of additional flags being applied to the object,
@@ -1105,10 +1115,8 @@ export class egwActionLink
 export function egwActionObject(_id, _parent, _iface, _manager, _flags)
 {
 	//Preset some parameters
-	if (typeof _manager == "undefined" && typeof _parent == "object" && _parent)
-		_manager = _parent.manager;
-	if (typeof _flags == "undefined")
-		_flags = 0;
+	if (typeof _manager == "undefined" && typeof _parent == "object" && _parent) _manager = _parent.manager;
+	if (typeof _flags == "undefined") _flags = 0;
 
 	this.id = _id;
 	this.parent = _parent;
@@ -1129,1192 +1137,1256 @@ export function egwActionObject(_id, _parent, _iface, _manager, _flags)
 	this.setAOI(_iface);
 }
 
-/**
- * Sets the action object interface - if "NULL" is given, the iface is set
- * to a dummy interface which is used to store the temporary data.
- *
- * @param {egwActionObjectInterface} _aoi
- */
-egwActionObject.prototype.setAOI = function (_aoi) {
-	if (_aoi == null)
+export class EgwActionObject
+{
+	readonly id: string
+	private readonly parent: EgwActionObject
+	private readonly children: any[] = []
+	private actionLinks: any[] = []
+	interface: EgwActionObjectInterface
+	readonly manager: EgwActionManager
+	private readonly flags: number
+	private data: any = null
+	private readonly setSelectedCallback: any = null;
+	private registeredImpls: any[] = [];
+	// Two variables which help fast travelling through the object tree, when
+	// searching for the selected/focused object.
+	private selectedChildren = [];
+	private focusedChild = null;
+	private readonly onBeforeTrigger: Function = undefined
+
+	constructor(_id: string, _parent: EgwActionObject, _interface: EgwActionObjectInterface, _manager?: EgwActionManager, _flags?: number)
 	{
-		_aoi = new egwActionObjectDummyInterface();
+		if (typeof _manager == "undefined" && typeof _parent == "object" && _parent) _manager = _parent.manager;
+		if (typeof _flags == "undefined") _flags = 0;
+
+
+		this.id = _id
+		this.parent = _parent
+		this.interface = _interface
+		this.manager = _manager
+		this.flags = _flags
+
+		this.setAOI(_interface)
 	}
 
-	// Copy the state from the old interface
-	if (this.iface)
+	protected triggerCallback(): boolean
 	{
-		_aoi.setState(this.iface.getState());
+		if (this.onBeforeTrigger)
+		{
+			return this.onBeforeTrigger()
+		}
+		return true;
 	}
 
-	// Replace the interface object
-	this.iface = _aoi;
-	this.iface.setStateChangeCallback(this._ifaceCallback, this);
-	this.iface.setReconnectActionsCallback(this._reconnectCallback, this);
-};
 
-/**
- * Returns the object from the tree with the given ID
- *
- * @param {string} _id
- * @param {number} _search_depth
- * @return {egwActionObject} description
- * @todo Add search function to egw_action_commons.js
- */
-egwActionObject.prototype.getObjectById = function (_id, _search_depth) {
-	if (this.id == _id)
+	/**
+	 * Sets the action object interface - if "NULL" is given, the iface is set
+	 * to a dummy interface which is used to store the temporary data.
+	 *
+	 * @param {egwActionObjectInterface} _aoi
+	 */
+	setAOI(_aoi)
 	{
-		return this;
-	}
-	if (typeof _search_depth == "undefined")
-	{
-		_search_depth = Number.MAX_VALUE;
-	}
+		if (_aoi == null)
+		{
+			_aoi = new EgwActionObjectDummyInterface();
+		}
 
-	for (var i = 0; i < this.children.length && _search_depth > 0; i++)
+		// Copy the state from the old interface
+		if (this.interface)
+		{
+			_aoi.setState(this.interface.getState());
+		}
+
+		// Replace the interface object
+		this.interface = _aoi;
+		this.interface.setStateChangeCallback(this._ifaceCallback, this);
+		this.interface.setReconnectActionsCallback(this._reconnectCallback, this);
+	};
+
+	/**
+	 * Returns the object from the tree with the given ID
+	 *
+	 * @param {string} _id
+	 * @param {number} _search_depth
+	 * @return {egwActionObject} description
+	 * @todo Add search function to egw_action_commons.js
+	 */
+	getObjectById(_id, _search_depth)
 	{
-		var obj = this.children[i].getObjectById(_id, _search_depth - 1);
+		if (this.id == _id)
+		{
+			return this;
+		}
+		if (typeof _search_depth == "undefined")
+		{
+			_search_depth = Number.MAX_VALUE;
+		}
+
+		for (var i = 0; i < this.children.length && _search_depth > 0; i++)
+		{
+			var obj = this.children[i].getObjectById(_id, _search_depth - 1);
+			if (obj)
+			{
+				return obj;
+			}
+		}
+
+		return null;
+	};
+
+	/**
+	 * Adds an object as child to the actionObject and returns it - if the supplied
+	 * parameter is a object, the object will be added directly, otherwise an object
+	 * with the given id will be created.
+	 *
+	 * @param {(string|object)} _id Id of the object which will be created or the object
+	 *    that will be added.
+	 * @param {object} _interface if _id was an string, _interface defines the interface which
+	 *    will be connected to the newly generated object.
+	 * @param {number} _flags are the flags will which be supplied to the newly generated
+	 *    object. May be omitted.
+	 * @returns object the generated object
+	 */
+	addObject(_id, _interface, _flags)
+	{
+		return this.insertObject(false, _id, _interface, _flags);
+	};
+
+	/**
+	 * Inserts an object as child to the actionObject and returns it - if the supplied
+	 * parameter is a object, the object will be added directly, otherwise an object
+	 * with the given id will be created.
+	 *
+	 * @param {number} _index Position where the object will be inserted, "false" will add it
+	 *    to the end of the list.
+	 * @param {string|object} _id Id of the object which will be created or the object
+	 *    that will be added.
+	 * @param {object} _iface if _id was an string, _iface defines the interface which
+	 *    will be connected to the newly generated object.
+	 * @param {number} _flags are the flags will which be supplied to the newly generated
+	 *    object. May be omitted.
+	 * @returns object the generated object
+	 */
+	insertObject(_index, _id, _iface, _flags)
+	{
+		if (_index === false) _index = this.children.length;
+
+		var obj = null;
+
+		if (typeof _id == "object")
+		{
+			obj = _id;
+
+			// Set the parent to null and reset the focus of the object
+			obj.parent = null;
+			obj.setFocused(false);
+
+			// Set the parent to this object
+			obj.parent = this;
+		} else if (typeof _id == "string")
+		{
+			obj = new egwActionObject(_id, this, _iface, this.manager, _flags);
+		}
+
 		if (obj)
 		{
-			return obj;
-		}
-	}
-
-	return null;
-};
-
-/**
- * Adds an object as child to the actionObject and returns it - if the supplied
- * parameter is a object, the object will be added directly, otherwise an object
- * with the given id will be created.
- *
- * @param {(string|object)} _id Id of the object which will be created or the object
- *    that will be added.
- * @param {object} _interface if _id was an string, _interface defines the interface which
- *    will be connected to the newly generated object.
- * @param {number} _flags are the flags will which be supplied to the newly generated
- *    object. May be omitted.
- * @returns object the generated object
- */
-egwActionObject.prototype.addObject = function (_id, _interface, _flags) {
-	return this.insertObject(false, _id, _interface, _flags);
-};
-
-/**
- * Inserts an object as child to the actionObject and returns it - if the supplied
- * parameter is a object, the object will be added directly, otherwise an object
- * with the given id will be created.
- *
- * @param {number} _index Position where the object will be inserted, "false" will add it
- *    to the end of the list.
- * @param {string|object} _id Id of the object which will be created or the object
- *    that will be added.
- * @param {object} _iface if _id was an string, _iface defines the interface which
- *    will be connected to the newly generated object.
- * @param {number} _flags are the flags will which be supplied to the newly generated
- *    object. May be omitted.
- * @returns object the generated object
- */
-egwActionObject.prototype.insertObject = function (_index, _id, _iface, _flags) {
-	if (_index === false)
-		_index = this.children.length;
-
-	var obj = null;
-
-	if (typeof _id == "object")
-	{
-		obj = _id;
-
-		// Set the parent to null and reset the focus of the object
-		obj.parent = null;
-		obj.setFocused(false);
-
-		// Set the parent to this object
-		obj.parent = this;
-	} else if (typeof _id == "string")
-	{
-		obj = new egwActionObject(_id, this, _iface, this.manager, _flags);
-	}
-
-	if (obj)
-	{
-		// Add the element to the children
-		this.children.splice(_index, 0, obj);
-	} else
-	{
-		throw "Error while adding new element to the ActionObjects!";
-	}
-
-	return obj;
-};
-
-/**
- * Deletes all children of the egwActionObject
- */
-egwActionObject.prototype.clear = function () {
-	// Remove all children
-	while (this.children.length > 0)
-	{
-		this.children[0].remove();
-	}
-
-	// Delete all other references
-	this.selectedChildren = [];
-	this.focusedChild = null;
-
-	// Remove links
-	this.actionLinks = [];
-};
-
-/**
- * Deletes this object from the parent container
- */
-egwActionObject.prototype.remove = function () {
-	// Remove focus and selection from this element
-	this.setFocused(false);
-	this.setSelected(false);
-	this.setAllSelected(false);
-
-	// Unregister all registered action implementations
-	this.unregisterActions();
-
-	// Clear the child-list
-	this.clear();
-
-	// Remove this element from the parent list
-	if (this.parent != null)
-	{
-		var idx = this.parent.children.indexOf(this);
-
-		if (idx >= 0)
-		{
-			this.parent.children.splice(idx, 1);
-		}
-	}
-};
-
-/**
- * Searches for the root object in the action object tree and returns it.
- */
-egwActionObject.prototype.getRootObject = function () {
-	if (this.parent === null)
-	{
-		return this;
-	} else
-	{
-		return this.parent.getRootObject();
-	}
-};
-
-/**
- * Returns a list with all parents of this object.
- */
-egwActionObject.prototype.getParentList = function () {
-	if (this.parent === null)
-	{
-		return [];
-	} else
-	{
-		var list = this.parent.getParentList();
-		list.unshift(this.parent);
-		return list;
-	}
-};
-
-/**
- * Returns the first parent which has the container flag
- */
-egwActionObject.prototype.getContainerRoot = function () {
-	if (egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER) || this.parent === null)
-	{
-		return this;
-	} else
-	{
-		return this.parent.getContainerRoot();
-	}
-};
-
-/**
- * Returns all selected objects which are in the current subtree.
- *
- * @param {function} _test is a function, which gets an object and checks whether
- *    it will be added to the list.
- * @param {array} _list is internally used to fetch all selected elements, please
- *    omit this parameter when calling the function.
- */
-egwActionObject.prototype.getSelectedObjects = function (_test, _list) {
-	if (typeof _test == "undefined")
-		_test = null;
-
-	if (typeof _list == "undefined")
-	{
-		_list = {"elements": []};
-	}
-
-	if ((!_test || _test(this)) && this.getSelected())
-		_list.elements.push(this);
-
-	if (this.selectedChildren)
-	{
-		for (var i = 0; i < this.selectedChildren.length; i++)
-		{
-			this.selectedChildren[i].getSelectedObjects(_test, _list);
-		}
-	}
-
-	return _list.elements;
-};
-
-/**
- * Returns whether all objects in this tree are selected
- */
-egwActionObject.prototype.getAllSelected = function () {
-	if (this.children.length == this.selectedChildren.length)
-	{
-		for (var i = 0; i < this.children.length; i++)
-		{
-			if (!this.children[i].getAllSelected())
-				return false;
-		}
-		// If this element is an container *and* does not have any children, we
-		// should return false. If this element is not an container we have to
-		// return true has this is the recursion base case
-		return (!egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER)) ||
-			(this.children.length > 0);
-	}
-
-	return false;
-};
-
-/**
- * Toggles the selection of all objects.
- *
- * @param _select boolean specifies whether the objects should get selected or not.
- *    If this parameter is not supplied, the selection will be toggled.
- */
-egwActionObject.prototype.toggleAllSelected = function (_select) {
-	if (typeof _select == "undefined")
-	{
-		_select = !this.getAllSelected();
-	}
-
-	// Check for a select_all action
-	if (_select && this.manager && this.manager.getActionById('select_all'))
-	{
-		return this.manager.getActionById('select_all').execute(this);
-	}
-	this.setAllSelected(_select);
-};
-
-/**
- * Creates a list which contains all items of the element tree.
- *
- * @param {boolean} _visibleOnly
- * @param {object} _obj is used internally to pass references to the array inside
- *    the object.
- * @return {array}
- */
-egwActionObject.prototype.flatList = function (_visibleOnly, _obj) {
-	if (typeof (_obj) == "undefined")
-	{
-		_obj = {
-			"elements": []
-		};
-	}
-
-	if (typeof (_visibleOnly) == "undefined")
-	{
-		_visibleOnly = false;
-	}
-
-	if (!_visibleOnly || this.getVisible())
-	{
-		_obj.elements.push(this);
-	}
-
-	for (var i = 0; i < this.children.length; i++)
-	{
-		this.children[i].flatList(_visibleOnly, _obj);
-	}
-
-	return _obj.elements;
-};
-
-/**
- * Returns a traversal list with all objects which are in between the given object
- * and this one. The operation returns an empty list, if a container object is
- * found on the way.
- *
- * @param {object} _to
- * @return {array}
- * @todo Remove flatList here!
- */
-egwActionObject.prototype.traversePath = function (_to) {
-	var contRoot = this.getContainerRoot();
-
-	if (contRoot)
-	{
-		// Get a flat list of all the hncp elements and search for this object
-		// and the object supplied in the _to parameter.
-		var flatList = contRoot.flatList();
-		var thisId = flatList.indexOf(this);
-		var toId = flatList.indexOf(_to);
-
-		// Check whether both elements have been found in this part of the tree,
-		// return the slice of that list.
-		if (thisId !== -1 && toId !== -1)
-		{
-			var from = Math.min(thisId, toId);
-			var to = Math.max(thisId, toId);
-
-			return flatList.slice(from, to + 1);
-		}
-	}
-
-	return [];
-};
-
-/**
- * Returns the index of this object in the children list of the parent object.
- */
-egwActionObject.prototype.getIndex = function () {
-	if (this.parent === null)
-	{
-		return 0;
-	} else
-	{
-		return this.parent.children.indexOf(this);
-	}
-};
-
-/**
- * Returns the deepest object which is currently focused. Objects with the
- * "container"-flag will not be returned.
- */
-egwActionObject.prototype.getFocusedObject = function () {
-	return this.focusedChild || null;
-};
-
-/**
- * Internal function which is connected to the ActionObjectInterface associated
- * with this object in the constructor. It gets called, whenever the object
- * gets (de)selected.
- *
- * @param {number} _newState is the new state of the object
- * @param {number} _changedBit
- * @param {number} _shiftState is the status of extra keys being pressed during the
- *    selection process.
- * @param {number}
- */
-egwActionObject.prototype._ifaceCallback = function (_newState, _changedBit, _shiftState) {
-	if (typeof _shiftState == "undefined")
-		_shiftState = EGW_AO_SHIFT_STATE_NONE;
-
-	var selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
-	var visible = egwBitIsSet(_newState, EGW_AO_STATE_VISIBLE);
-
-	// Check whether the visibility of the object changed
-	if (_changedBit == EGW_AO_STATE_VISIBLE && visible != this.getVisible())
-	{
-		// Deselect the object
-		if (!visible)
-		{
-			this.setSelected(false);
-			this.setFocused(false);
-			return EGW_AO_STATE_NORMAL;
+			// Add the element to the children
+			this.children.splice(_index, 0, obj);
 		} else
 		{
-			// Auto-register the actions attached to this object
-			this.registerActions();
+			throw "Error while adding new element to the ActionObjects!";
 		}
-	}
 
-	// Remove the focus from all children on the same level
-	if (this.parent && visible && _changedBit == EGW_AO_STATE_SELECTED)
+		return obj;
+	};
+
+	/**
+	 * Deletes all children of the egwActionObject
+	 */
+
+	clear()
 	{
-		var selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
-		var objs = [];
-
-		if (selected)
+		// Remove all children
+		while (this.children.length > 0)
 		{
-			// Search the index of this object
-			var id = this.parent.children.indexOf(this);
+			this.children[0].remove();
+		}
 
-			// Deselect all other objects inside this container, if the "MULTI" shift-
-			// state is not set
-			if (!egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_MULTI))
+		// Delete all other references
+		this.selectedChildren = [];
+		this.focusedChild = null;
+
+		// Remove links
+		this.actionLinks = [];
+	};
+
+	/**
+	 * Deletes this object from the parent container
+	 */
+	remove()
+	{
+		// Remove focus and selection from this element
+		this.setFocused(false);
+		this.setSelected(false);
+		this.setAllSelected(false);
+
+		// Unregister all registered action implementations
+		this.unregisterActions();
+
+		// Clear the child-list
+		this.clear();
+
+		// Remove this element from the parent list
+		if (this.parent != null)
+		{
+			var idx = this.parent.children.indexOf(this);
+
+			if (idx >= 0)
 			{
-				var lst = this.getContainerRoot().setAllSelected(false);
+				this.parent.children.splice(idx, 1);
 			}
+		}
+	};
 
-			// If the LIST state is active, get all objects inbetween this one and the focused one
-			// and set their select state.
-			if (egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_BLOCK))
+	/**
+	 * Searches for the root object in the action object tree and returns it.
+	 */
+	getRootObject()
+	{
+		if (this.parent === null)
+		{
+			return this;
+		} else
+		{
+			return this.parent.getRootObject();
+		}
+	};
+
+	/**
+	 * Returns a list with all parents of this object.
+	 */
+	getParentList()
+	{
+		if (this.parent === null)
+		{
+			return [];
+		} else
+		{
+			var list = this.parent.getParentList();
+			list.unshift(this.parent);
+			return list;
+		}
+	};
+
+	/**
+	 * Returns the first parent which has the container flag
+	 */
+	getContainerRoot()
+	{
+		if (egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER) || this.parent === null)
+		{
+			return this;
+		} else
+		{
+			return this.parent.getContainerRoot();
+		}
+	};
+
+	/**
+	 * Returns all selected objects which are in the current subtree.
+	 *
+	 * @param {function} _test is a function, which gets an object and checks whether
+	 *    it will be added to the list.
+	 * @param {array} _list is internally used to fetch all selected elements, please
+	 *    omit this parameter when calling the function.
+	 */
+	getSelectedObjects(_test, _list)
+	{
+		if (typeof _test == "undefined") _test = null;
+
+		if (typeof _list == "undefined")
+		{
+			_list = {"elements": []};
+		}
+
+		if ((!_test || _test(this)) && this.getSelected()) _list.elements.push(this);
+
+		if (this.selectedChildren)
+		{
+			for (var i = 0; i < this.selectedChildren.length; i++)
 			{
-				var focused = this.getFocusedObject();
-				if (focused)
+				this.selectedChildren[i].getSelectedObjects(_test, _list);
+			}
+		}
+
+		return _list.elements;
+	};
+
+	/**
+	 * Returns whether all objects in this tree are selected
+	 */
+	getAllSelected()
+	{
+		if (this.children.length == this.selectedChildren.length)
+		{
+			for (var i = 0; i < this.children.length; i++)
+			{
+				if (!this.children[i].getAllSelected()) return false;
+			}
+			// If this element is an container *and* does not have any children, we
+			// should return false. If this element is not an container we have to
+			// return true has this is the recursion base case
+			return (!egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER)) || (this.children.length > 0);
+		}
+
+		return false;
+	};
+
+	/**
+	 * Toggles the selection of all objects.
+	 *
+	 * @param _select boolean specifies whether the objects should get selected or not.
+	 *    If this parameter is not supplied, the selection will be toggled.
+	 */
+	toggleAllSelected(_select?)
+	{
+		if (typeof _select == "undefined")
+		{
+			_select = !this.getAllSelected();
+		}
+
+		// Check for a select_all action
+		if (_select && this.manager && this.manager.getActionById('select_all'))
+		{
+			return this.manager.getActionById('select_all').execute(this);
+		}
+		this.setAllSelected(_select);
+	};
+
+	/**
+	 * Creates a list which contains all items of the element tree.
+	 *
+	 * @param {boolean} _visibleOnly
+	 * @param {object} _obj is used internally to pass references to the array inside
+	 *    the object.
+	 * @return {array}
+	 */
+	flatList(_visibleOnly, _obj)
+	{
+		if (typeof (_obj) == "undefined")
+		{
+			_obj = {
+				"elements": []
+			};
+		}
+
+		if (typeof (_visibleOnly) == "undefined")
+		{
+			_visibleOnly = false;
+		}
+
+		if (!_visibleOnly || this.getVisible())
+		{
+			_obj.elements.push(this);
+		}
+
+		for (var i = 0; i < this.children.length; i++)
+		{
+			this.children[i].flatList(_visibleOnly, _obj);
+		}
+
+		return _obj.elements;
+	};
+
+	/**
+	 * Returns a traversal list with all objects which are in between the given object
+	 * and this one. The operation returns an empty list, if a container object is
+	 * found on the way.
+	 *
+	 * @param {object} _to
+	 * @return {array}
+	 * @todo Remove flatList here!
+	 */
+	traversePath(_to)
+	{
+		var contRoot = this.getContainerRoot();
+
+		if (contRoot)
+		{
+			// Get a flat list of all the hncp elements and search for this object
+			// and the object supplied in the _to parameter.
+			var flatList = contRoot.flatList();
+			var thisId = flatList.indexOf(this);
+			var toId = flatList.indexOf(_to);
+
+			// Check whether both elements have been found in this part of the tree,
+			// return the slice of that list.
+			if (thisId !== -1 && toId !== -1)
+			{
+				var from = Math.min(thisId, toId);
+				var to = Math.max(thisId, toId);
+
+				return flatList.slice(from, to + 1);
+			}
+		}
+
+		return [];
+	};
+
+	/**
+	 * Returns the index of this object in the children list of the parent object.
+	 */
+	getIndex()
+	{
+		if (this.parent === null)
+		{
+			return 0;
+		} else
+		{
+			return this.parent.children.indexOf(this);
+		}
+	};
+
+	/**
+	 * Returns the deepest object which is currently focused. Objects with the
+	 * "container"-flag will not be returned.
+	 */
+	getFocusedObject()
+	{
+		return this.focusedChild || null;
+	};
+
+	/**
+	 * Internal function which is connected to the ActionObjectInterface associated
+	 * with this object in the constructor. It gets called, whenever the object
+	 * gets (de)selected.
+	 *
+	 * @param {number} _newState is the new state of the object
+	 * @param {number} _changedBit
+	 * @param {number} _shiftState is the status of extra keys being pressed during the
+	 *    selection process.
+	 * @param {number}
+	 */
+	_ifaceCallback(_newState, _changedBit, _shiftState)
+	{
+		if (typeof _shiftState == "undefined") _shiftState = EGW_AO_SHIFT_STATE_NONE;
+
+		var selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
+		var visible = egwBitIsSet(_newState, EGW_AO_STATE_VISIBLE);
+
+		// Check whether the visibility of the object changed
+		if (_changedBit == EGW_AO_STATE_VISIBLE && visible != this.getVisible())
+		{
+			// Deselect the object
+			if (!visible)
+			{
+				this.setSelected(false);
+				this.setFocused(false);
+				return EGW_AO_STATE_NORMAL;
+			} else
+			{
+				// Auto-register the actions attached to this object
+				this.registerActions();
+			}
+		}
+
+		// Remove the focus from all children on the same level
+		if (this.parent && visible && _changedBit == EGW_AO_STATE_SELECTED)
+		{
+			var selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
+			var objs = [];
+
+			if (selected)
+			{
+				// Search the index of this object
+				var id = this.parent.children.indexOf(this);
+
+				// Deselect all other objects inside this container, if the "MULTI" shift-
+				// state is not set
+				if (!egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_MULTI))
 				{
-					objs = this.traversePath(focused);
-					for (var i = 0; i < objs.length; i++)
+					var lst = this.getContainerRoot().setAllSelected(false);
+				}
+
+				// If the LIST state is active, get all objects inbetween this one and the focused one
+				// and set their select state.
+				if (egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_BLOCK))
+				{
+					var focused = this.getFocusedObject();
+					if (focused)
 					{
-						objs[i].setSelected(true);
+						objs = this.traversePath(focused);
+						for (var i = 0; i < objs.length; i++)
+						{
+							objs[i].setSelected(true);
+						}
 					}
 				}
 			}
-		}
 
-		// If the focused element didn't belong to this container, or the "list"
-		// shift-state isn't active, set the focus to this element.
-		if (objs.length == 0 || !egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_BLOCK))
-		{
-			this.setFocused(true);
-			_newState = egwSetBit(EGW_AO_STATE_FOCUSED, _newState, true);
-		}
-
-		this.setSelected(selected);
-	}
-
-	return _newState;
-};
-
-/**
- * Handler for key presses
- *
- * @param {number} _keyCode
- * @param {boolean} _shift
- * @param {boolean} _ctrl
- * @param {boolean} _alt
- * @returns {boolean}
- */
-egwActionObject.prototype.handleKeyPress = function (_keyCode, _shift, _ctrl, _alt) {
-	switch (_keyCode)
-	{
-		case EGW_KEY_ARROW_UP:
-		case EGW_KEY_ARROW_DOWN:
-		case EGW_KEY_PAGE_UP:
-		case EGW_KEY_PAGE_DOWN:
-
-			if (!_alt)
+			// If the focused element didn't belong to this container, or the "list"
+			// shift-state isn't active, set the focus to this element.
+			if (objs.length == 0 || !egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_BLOCK))
 			{
-				var intval =
-					(_keyCode == EGW_KEY_ARROW_UP || _keyCode == EGW_KEY_ARROW_DOWN) ?
-						1 : 10;
+				this.setFocused(true);
+				_newState = egwSetBit(EGW_AO_STATE_FOCUSED, _newState, true);
+			}
 
-				if (this.children.length > 0)
+			this.setSelected(selected);
+		}
+
+		return _newState;
+	};
+
+	/**
+	 * Handler for key presses
+	 *
+	 * @param {number} _keyCode
+	 * @param {boolean} _shift
+	 * @param {boolean} _ctrl
+	 * @param {boolean} _alt
+	 * @returns {boolean}
+	 */
+
+	handleKeyPress(_keyCode, _shift, _ctrl, _alt)
+	{
+		switch (_keyCode)
+		{
+			case EGW_KEY_ARROW_UP:
+			case EGW_KEY_ARROW_DOWN:
+			case EGW_KEY_PAGE_UP:
+			case EGW_KEY_PAGE_DOWN:
+
+				if (!_alt)
 				{
-					// Get the focused object
-					var focused = this.getFocusedObject();
+					var intval = (_keyCode == EGW_KEY_ARROW_UP || _keyCode == EGW_KEY_ARROW_DOWN) ? 1 : 10;
 
-					// Determine the object which should get selected
-					var selObj = null;
-					if (!focused)
+					if (this.children.length > 0)
 					{
-						selObj = this.children[0];
-					} else
-					{
-						selObj = (_keyCode == EGW_KEY_ARROW_UP || _keyCode == EGW_KEY_PAGE_UP) ?
-							focused.getPrevious(intval) : focused.getNext(intval);
-					}
+						// Get the focused object
+						var focused = this.getFocusedObject();
 
-					if (selObj != null)
-					{
-						if (!_shift && !(this.parent && this.parent.data && this.parent.data.keyboard_select))
+						// Determine the object which should get selected
+						var selObj = null;
+						if (!focused)
 						{
-							this.setAllSelected(false);
-						} else if (!(this.parent && this.parent.data && this.parent.data.keyboard_select))
+							selObj = this.children[0];
+						} else
 						{
-							var objs = focused.traversePath(selObj);
-							for (var i = 0; i < objs.length; i++)
+							selObj = (_keyCode == EGW_KEY_ARROW_UP || _keyCode == EGW_KEY_PAGE_UP) ? focused.getPrevious(intval) : focused.getNext(intval);
+						}
+
+						if (selObj != null)
+						{
+							if (!_shift && !(this.parent && this.parent.data && this.parent.data.keyboard_select))
 							{
-								objs[i].setSelected(true);
+								this.setAllSelected(false);
+							} else if (!(this.parent && this.parent.data && this.parent.data.keyboard_select))
+							{
+								var objs = focused.traversePath(selObj);
+								for (var i = 0; i < objs.length; i++)
+								{
+									objs[i].setSelected(true);
+								}
 							}
+
+							if (!(this.parent.data && this.parent.data.keyboard_select))
+							{
+								selObj.setSelected(true);
+							}
+							selObj.setFocused(true);
+
+							// Tell the aoi of the object to make it visible
+							selObj.makeVisible();
 						}
 
-						if (!(this.parent.data && this.parent.data.keyboard_select))
-						{
-							selObj.setSelected(true);
-						}
-						selObj.setFocused(true);
-
-						// Tell the aoi of the object to make it visible
-						selObj.makeVisible();
+						return true;
 					}
+				}
 
+				break;
+
+			// Space bar toggles selected for current row
+			case EGW_KEY_SPACE:
+				if (this.children.length <= 0)
+				{
+					break;
+				}
+				// Mark that we're selecting by keyboard, or arrows will reset selection
+				if (!this.parent.data)
+				{
+					this.parent.data = {};
+				}
+				this.parent.data.keyboard_select = true;
+
+				// Get the focused object
+				var focused = this.getFocusedObject();
+
+				focused.setSelected(!focused.getSelected());
+
+				// Tell the aoi of the object to make it visible
+				focused.makeVisible();
+				return true;
+
+				break;
+			// Handle CTRL-A to select all elements in the current container
+			case EGW_KEY_A:
+				if (_ctrl && !_shift && !_alt)
+				{
+					this.toggleAllSelected();
 					return true;
 				}
-			}
 
-			break;
-
-		// Space bar toggles selected for current row
-		case EGW_KEY_SPACE:
-			if (this.children.length <= 0)
-			{
 				break;
-			}
-			// Mark that we're selecting by keyboard, or arrows will reset selection
-			if (!this.parent.data)
+		}
+
+		return false;
+	};
+
+
+	getPrevious(_intval)
+	{
+		if (this.parent != null)
+		{
+			if (this.getFocused() && !this.getSelected())
 			{
-				this.parent.data = {};
+				return this;
 			}
-			this.parent.data.keyboard_select = true;
 
-			// Get the focused object
-			var focused = this.getFocusedObject();
+			var flatTree = this.getContainerRoot().flatList();
 
-			focused.setSelected(!focused.getSelected());
-
-			// Tell the aoi of the object to make it visible
-			focused.makeVisible();
-			return true;
-
-			break;
-		// Handle CTRL-A to select all elements in the current container
-		case EGW_KEY_A:
-			if (_ctrl && !_shift && !_alt)
+			var idx = flatTree.indexOf(this);
+			if (idx > 0)
 			{
-				this.toggleAllSelected();
-				return true;
+				idx = Math.max(1, idx - _intval);
+				return flatTree[idx];
 			}
-
-			break;
-	}
-
-	return false;
-};
-
-egwActionObject.prototype.getPrevious = function (_intval) {
-	if (this.parent != null)
-	{
-		if (this.getFocused() && !this.getSelected())
-		{
-			return this;
 		}
 
-		var flatTree = this.getContainerRoot().flatList();
+		return this;
+	};
 
-		var idx = flatTree.indexOf(this);
-		if (idx > 0)
+
+	getNext(_intval)
+	{
+		if (this.parent != null)
 		{
-			idx = Math.max(1, idx - _intval);
-			return flatTree[idx];
-		}
-	}
-
-	return this;
-};
-
-egwActionObject.prototype.getNext = function (_intval) {
-	if (this.parent != null)
-	{
-		if (this.getFocused() && !this.getSelected())
-		{
-			return this;
-		}
-
-		var flatTree = this.getContainerRoot().flatList(true);
-
-		var idx = flatTree.indexOf(this);
-		if (idx < flatTree.length - 1)
-		{
-			idx = Math.min(flatTree.length - 1, idx + _intval);
-			return flatTree[idx];
-		}
-	}
-
-	return this;
-};
-
-/**
- * Returns whether the object is currently selected.
- */
-egwActionObject.prototype.getSelected = function () {
-	return egwBitIsSet(this.getState(), EGW_AO_STATE_SELECTED);
-};
-
-/**
- * Returns whether the object is currently focused.
- */
-egwActionObject.prototype.getFocused = function () {
-	return egwBitIsSet(this.getState(), EGW_AO_STATE_FOCUSED);
-};
-
-/**
- * Returns whether the object currently is visible - visible means, that the
- * AOI has a dom node and is visible.
- */
-egwActionObject.prototype.getVisible = function () {
-	return egwBitIsSet(this.getState(), EGW_AO_STATE_VISIBLE);
-};
-
-/**
- * Returns the complete state of the object.
- */
-egwActionObject.prototype.getState = function () {
-	return this.iface.getState();
-};
-
-
-/**
- * Sets the focus of the element. The formerly focused element in the tree will
- * be de-focused.
- *
- * @param {boolean} _focused - whether to remove or set the focus. Defaults to true
- */
-egwActionObject.prototype.setFocused = function (_focused) {
-	if (typeof _focused == "undefined")
-		_focused = true;
-
-	var state = this.iface.getState();
-
-	if (egwBitIsSet(state, EGW_AO_STATE_FOCUSED) != _focused)
-	{
-		// Un-focus the currently focused object
-		var currentlyFocused = this.getFocusedObject();
-		if (currentlyFocused && currentlyFocused != this)
-		{
-			currentlyFocused.setFocused(false);
-		}
-
-		this.iface.setState(egwSetBit(state, EGW_AO_STATE_FOCUSED, _focused));
-		if (this.parent)
-		{
-			this.parent.updateFocusedChild(this, _focused);
-		}
-	}
-
-	if (this.focusedChild != null && _focused == false)
-	{
-		this.focusedChild.setFocused(false);
-	}
-};
-
-/**
- * Sets the selected state of the element.
- *
- * @param {boolean} _selected
- * @TODO Callback
- */
-egwActionObject.prototype.setSelected = function (_selected) {
-	var state = this.iface.getState();
-
-	if ((egwBitIsSet(state, EGW_AO_STATE_SELECTED) != _selected) &&
-		egwBitIsSet(state, EGW_AO_STATE_VISIBLE))
-	{
-		this.iface.setState(egwSetBit(state, EGW_AO_STATE_SELECTED, _selected));
-		if (this.parent)
-		{
-			this.parent.updateSelectedChildren(this, _selected || this.selectedChildren.length > 0);
-		}
-	}
-};
-
-/**
- * Sets the selected state of all elements, including children
- *
- * @param {boolean} _selected
- * @param {boolean} _informParent
- */
-egwActionObject.prototype.setAllSelected = function (_selected, _informParent) {
-	if (typeof _informParent == "undefined")
-		_informParent = true;
-
-	var state = this.iface.getState();
-
-	// Update this element
-	if (egwBitIsSet(state, EGW_AO_STATE_SELECTED) != _selected)
-	{
-		this.iface.setState(egwSetBit(state, EGW_AO_STATE_SELECTED, _selected));
-		if (_informParent && this.parent)
-		{
-			this.parent.updateSelectedChildren(this, _selected);
-		}
-		if (this.parent.data && this.parent.data.keyboard_select)
-		{
-			this.parent.data.keyboard_select = false;
-		}
-	}
-
-	// Update the children if the should be selected or if they should be
-	// deselected and there are selected children.
-	if (_selected || this.selectedChildren.length > 0)
-	{
-		for (var i = 0; i < this.children.length; i++)
-		{
-			this.children[i].setAllSelected(_selected, false);
-		}
-	}
-
-	// Copy the selected children list
-	this.selectedChildren = [];
-	if (_selected)
-	{
-		for (var i = 0; i < this.children.length; i++)
-		{
-			this.selectedChildren.push(this.children[i]);
-		}
-	}
-
-	// Call the setSelectedCallback
-	egwQueueCallback(this.setSelectedCallback, [], this, "setSelectedCallback");
-};
-
-
-/**
- * Updates the selectedChildren array each actionObject has in order to determine
- * all selected children in a very fast manner.
- *
- * @param {(string|egwActionObject} _child
- * @param {boolean} _selected
- * @todo Has also to be updated, if an child is added/removed!
- */
-egwActionObject.prototype.updateSelectedChildren = function (_child, _selected) {
-	var id = this.selectedChildren.indexOf(_child); // TODO Replace by binary search, insert children sorted by index!
-	var wasEmpty = this.selectedChildren.length == 0;
-
-	// Add or remove the given child from the selectedChildren list
-	if (_selected && id == -1)
-	{
-		this.selectedChildren.push(_child);
-	} else if (!_selected && id != -1)
-	{
-		this.selectedChildren.splice(id, 1);
-	}
-
-	// If the emptieness of the selectedChildren array has changed, update the
-	// parent selected children array.
-	if (wasEmpty != this.selectedChildren.length == 0 && this.parent)
-	{
-		this.parent.updateSelectedChildren(this, wasEmpty);
-	}
-
-	// Call the setSelectedCallback
-	egwQueueCallback(this.setSelectedCallback, this.getContainerRoot().getSelectedObjects(), this, "setSelectedCallback");
-};
-
-/**
- * Updates the focusedChild up to the container boundary.
- *
- * @param {(string|egwActionObject} _child
- * @param {boolean} _focused
- */
-egwActionObject.prototype.updateFocusedChild = function (_child, _focused) {
-	if (_focused)
-	{
-		this.focusedChild = _child;
-	} else
-	{
-		if (this.focusedChild == _child)
-		{
-			this.focusedChild = null;
-		}
-	}
-
-	if (this.parent /*&& !egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER)*/)
-	{
-		this.parent.updateFocusedChild(_child, _focused);
-	}
-};
-
-/**
- * Updates the actionLinks of the given ActionObject.
- *
- * @param {array} _actionLinks contains the information about the actionLinks which
- *    should be updated as an array of objects. Example
- *    [
- *        {
- * 			"actionId": "file_delete",
- * 			"enabled": true
- * 		}
- *    ]
- *    If an supplied link doesn't exist yet, it will be created (if _doCreate is true)
- *    and added to the list. Otherwise the information will just be updated.
- * @param {boolean} _recursive If true, the settings will be applied to all child
- *    object (default false)
- * @param {boolean} _doCreate If true, not yet existing links will be created (default true)
- */
-egwActionObject.prototype.updateActionLinks = function (_actionLinks, _recursive, _doCreate) {
-	if (typeof _recursive == "undefined")
-		_recursive = false;
-	if (typeof _doCreate == "undefined")
-		_doCreate = true;
-
-	for (var i = 0; i < _actionLinks.length; i++)
-	{
-		var elem = _actionLinks[i];
-
-		// Allow single strings for simple action links.
-		if (typeof elem == "string")
-		{
-			elem = {"actionId": elem};
-		}
-
-		if (typeof elem.actionId != "undefined" && elem.actionId)
-		{
-			//Get the action link object, if it doesn't exist yet, create it
-			var actionLink = this.getActionLink(elem.actionId);
-			if (!actionLink && _doCreate)
+			if (this.getFocused() && !this.getSelected())
 			{
-				actionLink = new egwActionLink(this.manager);
-				this.actionLinks.push(actionLink);
+				return this;
 			}
 
-			//Set the supplied data
-			if (actionLink)
+			var flatTree = this.getContainerRoot().flatList(true);
+
+			var idx = flatTree.indexOf(this);
+			if (idx < flatTree.length - 1)
 			{
-				actionLink.updateLink(elem);
+				idx = Math.min(flatTree.length - 1, idx + _intval);
+				return flatTree[idx];
 			}
 		}
-	}
 
-	if (_recursive)
+		return this;
+	};
+
+	/**
+	 * Returns whether the object is currently selected.
+	 */
+
+	getSelected()
 	{
-		for (var i = 0; i < this.children.length; i++)
+		return egwBitIsSet(this.getState(), EGW_AO_STATE_SELECTED);
+	};
+
+	/**
+	 * Returns whether the object is currently focused.
+	 */
+
+	getFocused()
+	{
+		return egwBitIsSet(this.getState(), EGW_AO_STATE_FOCUSED);
+	};
+
+	/**
+	 * Returns whether the object currently is visible - visible means, that the
+	 * AOI has a dom node and is visible.
+	 */
+
+	getVisible()
+	{
+		return egwBitIsSet(this.getState(), EGW_AO_STATE_VISIBLE);
+	};
+
+	/**
+	 * Returns the complete state of the object.
+	 */
+
+	getState()
+	{
+		return this.interface.getState();
+	};
+
+
+	/**
+	 * Sets the focus of the element. The formerly focused element in the tree will
+	 * be de-focused.
+	 *
+	 * @param {boolean} _focused - whether to remove or set the focus. Defaults to true
+	 */
+
+	setFocused(_focused)
+	{
+		if (typeof _focused == "undefined") _focused = true;
+
+		var state = this.interface.getState();
+
+		if (egwBitIsSet(state, EGW_AO_STATE_FOCUSED) != _focused)
 		{
-			this.children[i].updateActionLinks(_actionLinks, true, _doCreate);
-		}
-	}
+			// Un-focus the currently focused object
+			var currentlyFocused = this.getFocusedObject();
+			if (currentlyFocused && currentlyFocused != this)
+			{
+				currentlyFocused.setFocused(false);
+			}
 
-	if (this.getVisible() && this.iface != null)
+			this.interface.setState(egwSetBit(state, EGW_AO_STATE_FOCUSED, _focused));
+			if (this.parent)
+			{
+				this.parent.updateFocusedChild(this, _focused);
+			}
+		}
+
+		if (this.focusedChild != null && _focused == false)
+		{
+			this.focusedChild.setFocused(false);
+		}
+	};
+
+	/**
+	 * Sets the selected state of the element.
+	 *
+	 * @param {boolean} _selected
+	 * @TODO Callback
+	 */
+
+	setSelected(_selected)
 	{
+		var state = this.interface.getState();
+
+		if ((egwBitIsSet(state, EGW_AO_STATE_SELECTED) != _selected) && egwBitIsSet(state, EGW_AO_STATE_VISIBLE))
+		{
+			this.interface.setState(egwSetBit(state, EGW_AO_STATE_SELECTED, _selected));
+			if (this.parent)
+			{
+				this.parent.updateSelectedChildren(this, _selected || this.selectedChildren.length > 0);
+			}
+		}
+	};
+
+	/**
+	 * Sets the selected state of all elements, including children
+	 *
+	 * @param {boolean} _selected
+	 * @param {boolean} _informParent
+	 */
+
+	setAllSelected(_selected, _informParent = true)
+	{
+		if (typeof _informParent == "undefined") _informParent = true;
+
+		var state = this.interface.getState();
+
+		// Update this element
+		if (egwBitIsSet(state, EGW_AO_STATE_SELECTED) != _selected)
+		{
+			this.interface.setState(egwSetBit(state, EGW_AO_STATE_SELECTED, _selected));
+			if (_informParent && this.parent)
+			{
+				this.parent.updateSelectedChildren(this, _selected);
+			}
+			if (this.parent.data && this.parent.data.keyboard_select)
+			{
+				this.parent.data.keyboard_select = false;
+			}
+		}
+
+		// Update the children if the should be selected or if they should be
+		// deselected and there are selected children.
+		if (_selected || this.selectedChildren.length > 0)
+		{
+			for (var i = 0; i < this.children.length; i++)
+			{
+				this.children[i].setAllSelected(_selected, false);
+			}
+		}
+
+		// Copy the selected children list
+		this.selectedChildren = [];
+		if (_selected)
+		{
+			for (var i = 0; i < this.children.length; i++)
+			{
+				this.selectedChildren.push(this.children[i]);
+			}
+		}
+
+		// Call the setSelectedCallback
+		egwQueueCallback(this.setSelectedCallback, [], this, "setSelectedCallback");
+	};
+
+
+	/**
+	 * Updates the selectedChildren array each actionObject has in order to determine
+	 * all selected children in a very fast manner.
+	 *
+	 * @param {(string|egwActionObject} _child
+	 * @param {boolean} _selected
+	 * @todo Has also to be updated, if an child is added/removed!
+	 */
+
+	updateSelectedChildren(_child, _selected)
+	{
+		const id: number = this.selectedChildren.indexOf(_child); // TODO Replace by binary search, insert children sorted by index!
+		const wasEmpty: boolean = this.selectedChildren.length == 0;
+
+		// Add or remove the given child from the selectedChildren list
+		if (_selected && id == -1)
+		{
+			this.selectedChildren.push(_child);
+		} else if (!_selected && id != -1)
+		{
+			this.selectedChildren.splice(id, 1);
+		}
+
+		// If the emptieness of the selectedChildren array has changed, update the
+		// parent selected children array.
+		if (wasEmpty != (this.selectedChildren.length == 0) && this.parent)
+		{
+			this.parent.updateSelectedChildren(this, wasEmpty);
+		}
+
+		// Call the setSelectedCallback
+		egwQueueCallback(this.setSelectedCallback, this.getContainerRoot().getSelectedObjects(), this, "setSelectedCallback");
+	};
+
+	/**
+	 * Updates the focusedChild up to the container boundary.
+	 *
+	 * @param {(string|egwActionObject} _child
+	 * @param {boolean} _focused
+	 */
+
+	updateFocusedChild(_child, _focused)
+	{
+		if (_focused)
+		{
+			this.focusedChild = _child;
+		} else
+		{
+			if (this.focusedChild == _child)
+			{
+				this.focusedChild = null;
+			}
+		}
+
+		if (this.parent /*&& !egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER)*/)
+		{
+			this.parent.updateFocusedChild(_child, _focused);
+		}
+	};
+
+	/**
+	 * Updates the actionLinks of the given ActionObject.
+	 *
+	 * @param {array} _actionLinks contains the information about the actionLinks which
+	 *    should be updated as an array of objects. Example
+	 *    [
+	 *        {
+	 * 			"actionId": "file_delete",
+	 * 			"enabled": true
+	 * 		}
+	 *    ]
+	 *    If an supplied link doesn't exist yet, it will be created (if _doCreate is true)
+	 *    and added to the list. Otherwise the information will just be updated.
+	 * @param {boolean} _recursive If true, the settings will be applied to all child
+	 *    object (default false)
+	 * @param {boolean} _doCreate If true, not yet existing links will be created (default true)
+	 */
+
+	updateActionLinks(_actionLinks, _recursive, _doCreate)
+	{
+		if (typeof _recursive == "undefined") _recursive = false;
+		if (typeof _doCreate == "undefined") _doCreate = true;
+
+		for (var i = 0; i < _actionLinks.length; i++)
+		{
+			var elem = _actionLinks[i];
+
+			// Allow single strings for simple action links.
+			if (typeof elem == "string")
+			{
+				elem = {"actionId": elem};
+			}
+
+			if (typeof elem.actionId != "undefined" && elem.actionId)
+			{
+				//Get the action link object, if it doesn't exist yet, create it
+				var actionLink = this.getActionLink(elem.actionId);
+				if (!actionLink && _doCreate)
+				{
+					actionLink = new egwActionLink(this.manager);
+					this.actionLinks.push(actionLink);
+				}
+
+				//Set the supplied data
+				if (actionLink)
+				{
+					actionLink.updateLink(elem);
+				}
+			}
+		}
+
+		if (_recursive)
+		{
+			for (var i = 0; i < this.children.length; i++)
+			{
+				this.children[i].updateActionLinks(_actionLinks, true, _doCreate);
+			}
+		}
+
+		if (this.getVisible() && this.interface != null)
+		{
+			this.registerActions();
+		}
+	};
+
+	/**
+	 * Reconnects the actions.
+	 */
+
+	_reconnectCallback()
+	{
+		this.registeredImpls = [];
 		this.registerActions();
-	}
-};
+	};
 
-/**
- * Reconnects the actions.
- */
-egwActionObject.prototype._reconnectCallback = function () {
-	this.registeredImpls = [];
-	this.registerActions();
-};
-
-/**
- * Registers the action implementations inside the DOM-Tree.
- */
-egwActionObject.prototype.registerActions = function () {
-	var groups = this.getActionImplementationGroups();
-
-	for (var group in groups)
+	/**
+	 * Registers the action implementations inside the DOM-Tree.
+	 */
+	registerActions()
 	{
-		// Get the action implementation for each group
-		if (typeof _egwActionClasses[group] != "undefined" &&
-			_egwActionClasses[group].implementation &&
-			this.iface)
-		{
-			var impl = _egwActionClasses[group].implementation();
+		const groups = this.getActionImplementationGroups();
 
-			if (this.registeredImpls.indexOf(impl) == -1)
+		for (const group in groups)
+		{
+			// Get the action implementation for each group
+			if (typeof window._egwActionClasses[group] != "undefined" && window._egwActionClasses[group].implementation && this.interface)
 			{
-				// Register a handler for that action with the interface of that object,
-				// the callback and this object as context for the callback
-				if (impl.registerAction(this.iface, this.executeActionImplementation, this))
+				const impl = window._egwActionClasses[group].implementation();
+
+				if (this.registeredImpls.indexOf(impl) == -1)
 				{
-					this.registeredImpls.push(impl);
-				}
-			}
-		}
-	}
-};
-
-/**
- * Unregisters all action implementations registerd to this element
- */
-egwActionObject.prototype.unregisterActions = function () {
-	while (this.registeredImpls.length > 0)
-	{
-		var impl = this.registeredImpls.pop();
-		if (this.iface)
-		{
-			impl.unregisterAction(this.iface);
-		}
-	}
-};
-
-
-/**
- * Calls the onBeforeTrigger function - if it is set - or returns false.
- */
-egwActionObject.prototype.triggerCallback = function () {
-	if (this.onBeforeTrigger)
-	{
-		return this.onBeforeTrigger();
-	}
-	return true;
-};
-
-/**
- * Calls the corresponding function of the AOI which tries to make the object
- * visible.
- */
-egwActionObject.prototype.makeVisible = function () {
-	this.iface.makeVisible();
-};
-
-
-/**
- * Executes the action implementation which is associated to the given action type.
- *
- * @param {object} _implContext is data which should be delivered to the action implementation.
- *    E.g. in case of the popup action implementation, the x and y coordinates where the
- *    menu should open, and contextmenu event are transmitted.
- * @param {string} _implType is the action type for which the implementation should be
- *    executed.
- * @param {number} _execType specifies in which context the execution should take place.
- *    defaults to EGW_AO_EXEC_SELECTED
- */
-egwActionObject.prototype.executeActionImplementation = function (_implContext, _implType, _execType) {
-	if (typeof _execType == "undefined")
-	{
-		_execType = EGW_AO_EXEC_SELECTED;
-	}
-
-	if (typeof _implType == "string")
-	{
-		_implType = _egwActionClasses[_implType].implementation();
-	}
-
-	if (typeof _implType == "object" && _implType)
-	{
-		if (_execType == EGW_AO_EXEC_SELECTED)
-		{
-			if (!(egwBitIsSet(EGW_AO_FLAG_IS_CONTAINER, this.flags)))
-			{
-				this.forceSelection();
-			}
-			var selectedActions = this.getSelectedLinks(_implType.type);
-		} else if (_execType == EGW_AO_EXEC_THIS)
-		{
-			selectedActions = this._getLinks([this], _implType.type);
-		}
-
-		if (selectedActions.selected.length > 0 && egwObjectLength(selectedActions.links) > 0)
-		{
-			return _implType.executeImplementation(_implContext,
-				selectedActions.selected, selectedActions.links);
-		}
-	}
-
-	return false;
-};
-
-/**
- * Forces the object to be inside the currently selected objects. If this is
- * not the case, the object will select itself and deselect all other objects.
- */
-egwActionObject.prototype.forceSelection = function () {
-	var selected = this.getContainerRoot().getSelectedObjects();
-
-	// Check whether this object is in the list
-	var thisInList = selected.indexOf(this) != -1;
-
-	// If not, select it
-	if (!thisInList)
-	{
-		this.getContainerRoot().setAllSelected(false);
-		this.setSelected(true);
-	}
-
-	this.setFocused(true);
-};
-
-/**
- * Returns all selected objects, and all action links of those objects, which are
- * of the given implementation type, wheras actionLink properties such as
- * "enabled" and "visible" are accumulated.
- *
- * Objects have the chance to change their action links or to deselect themselves
- * in the onBeforeTrigger event, which is evaluated by the triggerCallback function.
- *
- * @param _actionType is the action type for which the actionLinks should be collected.
- * @returns object An object which contains a "links" and a "selected" section with
- *    an array of links/selected objects-
- */
-egwActionObject.prototype.getSelectedLinks = function (_actionType) {
-	// Get all objects in this container which are currently selected
-	var selected = this.getContainerRoot().getSelectedObjects();
-
-	return this._getLinks(selected, _actionType);
-};
-
-/**
- *
- * @param {array} _objs
- * @param {string} _actionType
- * @return {object} with attributes "selected" and "links"
- */
-egwActionObject.prototype._getLinks = function (_objs, _actionType) {
-	var actionLinks = {};
-	var testedSelected = [];
-
-	var test = function (olink) {
-		// Test whether the action type is of the given implementation type
-		if (olink.actionObj.type == _actionType)
-		{
-			if (typeof actionLinks[olink.actionId] == "undefined")
-			{
-				actionLinks[olink.actionId] = {
-					"actionObj": olink.actionObj,
-					"enabled": (testedSelected.length == 1),
-					"visible": false,
-					"cnt": 0
-				};
-			}
-
-			// Accumulate the action link properties
-			var llink = actionLinks[olink.actionId];
-			llink.enabled = llink.enabled && olink.actionObj.enabled.exec(olink.actionObj, _objs, _objs[i]) &&
-				olink.enabled && olink.visible;
-			llink.visible = (llink.visible || olink.visible);
-			llink.cnt++;
-
-			// Add in children, so they can get checked for visible / enabled
-			if (olink.actionObj && olink.actionObj.children.length > 0)
-			{
-				for (var j = 0; j < olink.actionObj.children.length; j++)
-				{
-					var child = olink.actionObj.children[j];
-					test({
-						actionObj: child,
-						actionId: child.id,
-						enabled: olink.enabled,
-						visible: olink.visible
-					});
+					// Register a handler for that action with the interface of that object,
+					// the callback and this object as context for the callback
+					if (impl.registerAction(this.interface, this.executeActionImplementation, this))
+					{
+						this.registeredImpls.push(impl);
+					}
 				}
 			}
 		}
 	};
 
-	for (var i = 0; i < _objs.length; i++)
+	/**
+	 * Unregisters all action implementations registerd to this element
+	 */
+	unregisterActions()
 	{
-		var obj = _objs[i];
-		if (!egwBitIsSet(obj.flags, EGW_AO_FLAG_IS_CONTAINER) && obj.triggerCallback())
+		while (this.registeredImpls.length > 0)
 		{
-			testedSelected.push(obj);
-
-			for (var j = 0; j < obj.actionLinks.length; j++)
+			var impl = this.registeredImpls.pop();
+			if (this.interface)
 			{
-				test(obj.actionLinks[j]); //object link
+				impl.unregisterAction(this.interface);
 			}
 		}
-	}
-
-	// Check whether all objects supported the action
-	for (var k in actionLinks)
-	{
-		actionLinks[k].enabled = actionLinks[k].enabled &&
-			(actionLinks[k].cnt >= testedSelected.length) &&
-			(
-				(actionLinks[k].actionObj.allowOnMultiple === true) ||
-				(actionLinks[k].actionObj.allowOnMultiple == "only" && _objs.length > 1) ||
-				(actionLinks[k].actionObj.allowOnMultiple == false && _objs.length === 1) ||
-				(typeof actionLinks[k].actionObj.allowOnMultiple === 'number' && _objs.length == actionLinks[k].actionObj.allowOnMultiple)
-			);
-		if (!egwIsMobile()) actionLinks[k].actionObj.hideOnMobile = false;
-		actionLinks[k].visible = actionLinks[k].visible && !actionLinks[k].actionObj.hideOnMobile &&
-			(actionLinks[k].enabled || !actionLinks[k].actionObj.hideOnDisabled);
-	}
-
-	// Return an object which contains the accumulated actionLinks and all selected
-	// objects.
-	return {
-		"selected": testedSelected,
-		"links": actionLinks
 	};
-};
 
-/**
- * Returns the action link, which contains the association to the action with
- * the given actionId.
- *
- * @param {string} _actionId name of the action associated to the link
- */
-egwActionObject.prototype.getActionLink = function (_actionId) {
-	for (var i = 0; i < this.actionLinks.length; i++)
+	/**
+	 * Calls the corresponding function of the AOI which tries to make the object
+	 * visible.
+	 */
+	makeVisible()
 	{
-		if (this.actionLinks[i].actionObj.id == _actionId)
+		this.interface.makeVisible();
+	};
+
+
+	/**
+	 * Executes the action implementation which is associated to the given action type.
+	 *
+	 * @param {object} _implContext is data which should be delivered to the action implementation.
+	 *    E.g. in case of the popup action implementation, the x and y coordinates where the
+	 *    menu should open, and contextmenu event are transmitted.
+	 * @param {string} _implType is the action type for which the implementation should be
+	 *    executed.
+	 * @param {number} _execType specifies in which context the execution should take place.
+	 *    defaults to EGW_AO_EXEC_SELECTED
+	 */
+
+	executeActionImplementation(_implContext, _implType, _execType)
+	{
+		if (typeof _execType == "undefined")
 		{
-			return this.actionLinks[i];
+			_execType = EGW_AO_EXEC_SELECTED;
 		}
-	}
 
-	return null;
-};
+		if (typeof _implType == "string")
+		{
+			_implType = window._egwActionClasses[_implType].implementation();
+		}
 
-/**
- * Returns all actions associated to the object tree, grouped by type.
- *
- * @param {function} _test gets an egwActionObject and should return, whether the
- *    actions of this object are added to the result. Defaults to a "always true"
- *    function.
- * @param {object} _groups is an internally used parameter, may be omitted.
- */
-egwActionObject.prototype.getActionImplementationGroups = function (_test, _groups) {
-	// If the _groups parameter hasn't been given preset it to an empty object
-	// (associative array).
-	if (typeof _groups == "undefined")
-		_groups = {};
-	if (typeof _test == "undefined")
-		_test = function (_obj) {
+		if (typeof _implType == "object" && _implType)
+		{
+			let selectedActions;
+			if (_execType == EGW_AO_EXEC_SELECTED)
+			{
+				if (!(egwBitIsSet(EGW_AO_FLAG_IS_CONTAINER, this.flags)))
+				{
+					this.forceSelection();
+				}
+				selectedActions = this.getSelectedLinks(_implType.type);
+			} else if (_execType == EGW_AO_EXEC_THIS)
+			{
+				selectedActions = this._getLinks([this], _implType.type);
+			}
+
+			if (selectedActions.selected.length > 0 && egwObjectLength(selectedActions.links) > 0)
+			{
+				return _implType.executeImplementation(_implContext, selectedActions.selected, selectedActions.links);
+			}
+		}
+
+		return false;
+	};
+
+	/**
+	 * Forces the object to be inside the currently selected objects. If this is
+	 * not the case, the object will select itself and deselect all other objects.
+	 */
+
+	forceSelection()
+	{
+		var selected = this.getContainerRoot().getSelectedObjects();
+
+		// Check whether this object is in the list
+		var thisInList = selected.indexOf(this) != -1;
+
+		// If not, select it
+		if (!thisInList)
+		{
+			this.getContainerRoot().setAllSelected(false);
+			this.setSelected(true);
+		}
+
+		this.setFocused(true);
+	};
+
+	/**
+	 * Returns all selected objects, and all action links of those objects, which are
+	 * of the given implementation type, wheras actionLink properties such as
+	 * "enabled" and "visible" are accumulated.
+	 *
+	 * Objects have the chance to change their action links or to deselect themselves
+	 * in the onBeforeTrigger event, which is evaluated by the triggerCallback function.
+	 *
+	 * @param _actionType is the action type for which the actionLinks should be collected.
+	 * @returns object An object which contains a "links" and a "selected" section with
+	 *    an array of links/selected objects-
+	 */
+
+	getSelectedLinks(_actionType)
+	{
+		// Get all objects in this container which are currently selected
+		var selected = this.getContainerRoot().getSelectedObjects();
+
+		return this._getLinks(selected, _actionType);
+	};
+
+	/**
+	 *
+	 * @param {array} _objs
+	 * @param {string} _actionType
+	 * @return {object} with attributes "selected" and "links"
+	 */
+
+	_getLinks(_objs, _actionType)
+	{
+		var actionLinks = {};
+		var testedSelected = [];
+
+		var test = function (olink) {
+			// Test whether the action type is of the given implementation type
+			if (olink.actionObj.type == _actionType)
+			{
+				if (typeof actionLinks[olink.actionId] == "undefined")
+				{
+					actionLinks[olink.actionId] = {
+						"actionObj": olink.actionObj,
+						"enabled": (testedSelected.length == 1),
+						"visible": false,
+						"cnt": 0
+					};
+				}
+
+				// Accumulate the action link properties
+				var llink = actionLinks[olink.actionId];
+				llink.enabled = llink.enabled && olink.actionObj.enabled.exec(olink.actionObj, _objs, _objs[i]) && olink.enabled && olink.visible;
+				llink.visible = (llink.visible || olink.visible);
+				llink.cnt++;
+
+				// Add in children, so they can get checked for visible / enabled
+				if (olink.actionObj && olink.actionObj.children.length > 0)
+				{
+					for (var j = 0; j < olink.actionObj.children.length; j++)
+					{
+						var child = olink.actionObj.children[j];
+						test({
+							actionObj: child, actionId: child.id, enabled: olink.enabled, visible: olink.visible
+						});
+					}
+				}
+			}
+		};
+
+		for (var i = 0; i < _objs.length; i++)
+		{
+			var obj = _objs[i];
+			if (!egwBitIsSet(obj.flags, EGW_AO_FLAG_IS_CONTAINER) && obj.triggerCallback())
+			{
+				testedSelected.push(obj);
+
+				for (var j = 0; j < obj.actionLinks.length; j++)
+				{
+					test(obj.actionLinks[j]); //object link
+				}
+			}
+		}
+
+		// Check whether all objects supported the action
+		for (var k in actionLinks)
+		{
+			actionLinks[k].enabled = actionLinks[k].enabled && (actionLinks[k].cnt >= testedSelected.length) && ((actionLinks[k].actionObj.allowOnMultiple === true) || (actionLinks[k].actionObj.allowOnMultiple == "only" && _objs.length > 1) || (actionLinks[k].actionObj.allowOnMultiple == false && _objs.length === 1) || (typeof actionLinks[k].actionObj.allowOnMultiple === 'number' && _objs.length == actionLinks[k].actionObj.allowOnMultiple));
+			if (!window.egwIsMobile()) actionLinks[k].actionObj.hideOnMobile = false;
+			actionLinks[k].visible = actionLinks[k].visible && !actionLinks[k].actionObj.hideOnMobile && (actionLinks[k].enabled || !actionLinks[k].actionObj.hideOnDisabled);
+		}
+
+		// Return an object which contains the accumulated actionLinks and all selected
+		// objects.
+		return {
+			"selected": testedSelected, "links": actionLinks
+		};
+	};
+
+	/**
+	 * Returns the action link, which contains the association to the action with
+	 * the given actionId.
+	 *
+	 * @param {string} _actionId name of the action associated to the link
+	 */
+
+	getActionLink(_actionId)
+	{
+		for (var i = 0; i < this.actionLinks.length; i++)
+		{
+			if (this.actionLinks[i].actionObj.id == _actionId)
+			{
+				return this.actionLinks[i];
+			}
+		}
+
+		return null;
+	};
+
+	/**
+	 * Returns all actions associated to the object tree, grouped by type.
+	 *
+	 * @param {function} _test gets an egwActionObject and should return, whether the
+	 *    actions of this object are added to the result. Defaults to a "always true"
+	 *    function.
+	 * @param {object} _groups is an internally used parameter, may be omitted.
+	 */
+
+	getActionImplementationGroups(_test?, _groups?)
+	{
+		// If the _groups parameter hasn't been given preset it to an empty object
+		// (associative array).
+		if (typeof _groups == "undefined") _groups = {};
+		if (typeof _test == "undefined") _test = function (_obj) {
 			return true;
 		};
 
-	for (var i = 0; i < this.actionLinks.length; i++)
-	{
-		var action = this.actionLinks[i].actionObj;
-		if (typeof action != "undefined" && _test(this))
+		for (var i = 0; i < this.actionLinks.length; i++)
 		{
-			if (typeof _groups[action.type] == "undefined")
+			var action = this.actionLinks[i].actionObj;
+			if (typeof action != "undefined" && _test(this))
 			{
-				_groups[action.type] = [];
-			}
-
-			_groups[action.type].push(
+				if (typeof _groups[action.type] == "undefined")
 				{
-					"object": this,
-					"link": this.actionLinks[i]
+					_groups[action.type] = [];
 				}
-			);
+
+				_groups[action.type].push({
+					"object": this, "link": this.actionLinks[i]
+				});
+			}
 		}
-	}
 
-	// Recursively add the actions of the children to the result (as _groups is
-	// an object, only the reference is passed).
-	for (var i = 0; i < this.children.length; i++)
+		// Recursively add the actions of the children to the result (as _groups is
+		// an object, only the reference is passed).
+		for (var i = 0; i < this.children.length; i++)
+		{
+			this.children[i].getActionImplementationGroups(_test, _groups);
+		}
+
+		return _groups;
+	};
+
+	/**
+	 * Check if user tries to get dragOut action
+	 *
+	 * keys for dragOut:
+	 *    -Mac: Command + Shift
+	 *    -Others: Alt + Shift
+	 *
+	 * @param {event} _event
+	 * @return {boolean} return true if Alt+Shift keys and left mouse click arre pressed, otherwise false
+	 */
+
+	isDragOut(_event)
 	{
-		this.children[i].getActionImplementationGroups(_test, _groups);
-	}
+		return (_event.altKey || _event.metaKey) && _event.shiftKey && _event.which == 1;
+	};
 
-	return _groups;
-};
+	/**
+	 * Check if user tries to get selection action
+	 *
+	 * Keys for selection:
+	 *    -Mac: Command key
+	 *    -Others: Ctrl key
+	 *
+	 * @param {type} _event
+	 * @returns {Boolean} return true if left mouse click and Ctrl/Alt key are pressed, otherwise false
+	 */
 
-/**
- * Check if user tries to get dragOut action
- *
- * keys for dragOut:
- *    -Mac: Command + Shift
- *    -Others: Alt + Shift
- *
- * @param {event} _event
- * @return {boolean} return true if Alt+Shift keys and left mouse click arre pressed, otherwise false
- */
-egwActionObject.prototype.isDragOut = function (_event) {
-	return (_event.altKey || _event.metaKey) && _event.shiftKey && _event.which == 1;
-};
+	isSelection(_event)
+	{
+		return !(_event.shiftKey) && _event.which == 1 && (_event.metaKey || _event.ctrlKey || _event.altKey);
+	};
+}
 
-/**
- * Check if user tries to get selection action
- *
- * Keys for selection:
- *    -Mac: Command key
- *    -Others: Ctrl key
- *
- * @param {type} _event
- * @returns {Boolean} return true if left mouse click and Ctrl/Alt key are pressed, otherwise false
- */
-egwActionObject.prototype.isSelection = function (_event) {
-	return !(_event.shiftKey) && _event.which == 1 && (_event.metaKey || _event.ctrlKey || _event.altKey);
-};
 
 /** egwActionObjectInterface Interface **/
 
@@ -2361,127 +2433,290 @@ export function egwActionObjectInterface()
 	this.reconnectActionsContext = null;
 }
 
+/** egwActionObjectInterface Interface **/
+
 /**
- * Sets the callback function which will be called when a user interaction changes
- * state of the object.
+ * The egwActionObjectInterface has to be implemented for each actual object in
+ * the browser. E.g. for the object "DataGridRow", there has to be an
+ * egwActionObjectInterface which is responsible for returning the outer DOMNode
+ * of the object to which JS-Events may be attached by the egwActionImplementation
+ * object, and to do object specific stuff like highlighting the object in the
+ * correct way and to route state changes (like: "object has been selected")
+ * to the egwActionObject object the interface is associated to.
  *
- * @param {function} _callback
- * @param {object} _context
+ * @return {egwActionObjectInterface}
  */
-egwActionObjectInterface.prototype.setStateChangeCallback = function (_callback, _context) {
-	this.stateChangeCallback = _callback;
-	this.stateChangeContext = _context;
-};
+export interface EgwActionObjectInterface
+{
+	//properties
+	_state: number;
+	stateChangeCallback: Function;
+	stateChangeContext: any;
+	reconnectActionsCallback: Function;
+	reconnectActionsContext: any;
 
-/**
- * Sets the reconnectActions callback, which will be called by the AOI if its
- * DOM-Node has been replaced and the actions have to be re-registered.
- *
- * @param {function} _callback
- * @param {object} _context
- */
-egwActionObjectInterface.prototype.setReconnectActionsCallback = function (_callback, _context) {
-	this.reconnectActionsCallback = _callback;
-	this.reconnectActionsContext = _context;
-};
+	//functions
+	/**
+	 * Sets the callback function which will be called when a user interaction changes
+	 * state of the object.
+	 *
+	 * @param {function} _callback
+	 * @param {object} _context
+	 */
+	setStateChangeCallback(_callback: Function, _context: any): void;
 
-/**
- * Will be called by the aoi if the actions have to be re-registered due to a
- * DOM-Node exchange.
- */
-egwActionObjectInterface.prototype.reconnectActions = function () {
-	if (this.reconnectActionsCallback)
-	{
-		this.reconnectActionsCallback.call(this.reconnectActionsContext);
-	}
-};
+	/**
+	 * Sets the reconnectActions callback, which will be called by the AOI if its
+	 * DOM-Node has been replaced and the actions have to be re-registered.
+	 *
+	 * @param {function} _callback
+	 * @param {object} _context
+	 */
+	setReconnectActionsCallback(_callback: Function, _context: any): void;
 
-/**
- * Internal function which should be used whenever the select status of the object
- * has been changed by the user. This will automatically calculate the new state of
- * the object and call the stateChangeCallback (if it has been set)
- *
- * @param {number} _stateBit is the bit in the state bit which should be changed
- * @param {boolean} _set specifies whether the state bit should be set or not
- * @param {boolean} _shiftState
- */
-egwActionObjectInterface.prototype.updateState = function (_stateBit, _set, _shiftState) {
-	// Calculate the new state
-	var newState = egwSetBit(this._state, _stateBit, _set);
+	/**
+	 * Will be called by the aoi if the actions have to be re-registered due to a
+	 * DOM-Node exchange.
+	 */
+	reconnectActions(): void;
 
-	// Call the stateChangeCallback if the state really changed
-	if (this.stateChangeCallback)
-	{
-		this._state = this.stateChangeCallback.call(this.stateChangeContext, newState,
-			_stateBit, _shiftState);
-	} else
-	{
-		this._state = newState;
-	}
-};
+	/**
+	 * Internal function which should be used whenever the select status of the object
+	 * has been changed by the user. This will automatically calculate the new state of
+	 * the object and call the stateChangeCallback (if it has been set)
+	 *
+	 * @param {number} _stateBit is the bit in the state bit which should be changed
+	 * @param {boolean} _set specifies whether the state bit should be set or not
+	 * @param {boolean} _shiftState
+	 */
+	updateState(_stateBit: number, _set: boolean, _shiftState: boolean): void;
 
-/**
- * Returns the DOM-Node the ActionObject is actually a representation of.
- * Calls the internal "doGetDOMNode" function, which has to be overwritten
- * by implementations of this class.
- */
-egwActionObjectInterface.prototype.getDOMNode = function () {
-	return this.doGetDOMNode();
-};
 
-/**
- * Sets the state of the object.
- * Calls the internal "doSetState" function, which has to be overwritten
- * by implementations of this class. The state-change callback must not be evoked!
- *
- * @param _state is the state of the object.
- */
-egwActionObjectInterface.prototype.setState = function (_state) {
-	//Call the doSetState function with the new state (if it has changed at all)
-	if (_state != this._state)
-	{
-		this._state = _state;
-		this.doSetState(_state);
-	}
-};
+	/**
+	 * Returns the DOM-Node the ActionObject is actually a representation of.
+	 * Calls the internal "doGetDOMNode" function, which has to be overwritten
+	 * by implementations of this class.
+	 */
+	getDOMNode(): Element;
 
-/**
- * Returns the current state of the object. The state is maintained by the
- * egwActionObjectInterface and implementations do not have to overwrite this
- * function as long as they call the _selectChange function.
- */
-egwActionObjectInterface.prototype.getState = function () {
-	return this._state;
-};
+	setState(_state: any): void;
 
-/**
- * The trigger event function can be called by the action implementation in order
- * to tell the AOI to perform some action.
- * In the drag/drop handler this function is e.g. used for telling the droppable
- * element that there was a drag over/out event.
- *
- * @param {object} _event
- * @param _data
- */
-egwActionObjectInterface.prototype.triggerEvent = function (_event, _data) {
-	if (typeof _data == "undefined")
-	{
-		_data = null;
-	}
+	getState(): number;
 
-	return this.doTriggerEvent(_event, _data);
-};
+	triggerEvent(_event: any, _data: any): boolean;
 
-/**
- * Scrolls the element into a visble area if it is currently hidden
- */
-egwActionObjectInterface.prototype.makeVisible = function () {
-	return this.doMakeVisible();
-};
+	/**
+	 * Scrolls the element into a visble area if it is currently hidden
+	 */
+	makeVisible(): void;
+}
+
+// /**
+//  * Sets the callback function which will be called when a user interaction changes
+//  * state of the object.
+//  *
+//  * @param {function} _callback
+//  * @param {object} _context
+//  */
+// egwActionObjectInterface.prototype.setStateChangeCallback = function (_callback, _context) {
+// 	this.stateChangeCallback = _callback;
+// 	this.stateChangeContext = _context;
+// };
+//
+// /**
+//  * Sets the reconnectActions callback, which will be called by the AOI if its
+//  * DOM-Node has been replaced and the actions have to be re-registered.
+//  *
+//  * @param {function} _callback
+//  * @param {object} _context
+//  */
+// egwActionObjectInterface.prototype.setReconnectActionsCallback = function (_callback, _context) {
+// 	this.reconnectActionsCallback = _callback;
+// 	this.reconnectActionsContext = _context;
+// };
+//
+// /**
+//  * Will be called by the aoi if the actions have to be re-registered due to a
+//  * DOM-Node exchange.
+//  */
+// egwActionObjectInterface.prototype.reconnectActions = function () {
+// 	if (this.reconnectActionsCallback)
+// 	{
+// 		this.reconnectActionsCallback.call(this.reconnectActionsContext);
+// 	}
+// };
+//
+// /**
+//  * Internal function which should be used whenever the select status of the object
+//  * has been changed by the user. This will automatically calculate the new state of
+//  * the object and call the stateChangeCallback (if it has been set)
+//  *
+//  * @param {number} _stateBit is the bit in the state bit which should be changed
+//  * @param {boolean} _set specifies whether the state bit should be set or not
+//  * @param {boolean} _shiftState
+//  */
+// egwActionObjectInterface.prototype.updateState = function (_stateBit, _set, _shiftState) {
+// 	// Calculate the new state
+// 	var newState = egwSetBit(this._state, _stateBit, _set);
+//
+// 	// Call the stateChangeCallback if the state really changed
+// 	if (this.stateChangeCallback)
+// 	{
+// 		this._state = this.stateChangeCallback.call(this.stateChangeContext, newState,
+// 			_stateBit, _shiftState);
+// 	} else
+// 	{
+// 		this._state = newState;
+// 	}
+// };
+//
+// /**
+//  * Returns the DOM-Node the ActionObject is actually a representation of.
+//  * Calls the internal "doGetDOMNode" function, which has to be overwritten
+//  * by implementations of this class.
+//  */
+// egwActionObjectInterface.prototype.getDOMNode = function (): Element {
+// 	return this.doGetDOMNode();
+// };
+//
+// /**
+//  * Sets the state of the object.
+//  * Calls the internal "doSetState" function, which has to be overwritten
+//  * by implementations of this class. The state-change callback must not be evoked!
+//  *
+//  * @param _state is the state of the object.
+//  */
+// egwActionObjectInterface.prototype.setState = function (_state) {
+// 	//Call the doSetState function with the new state (if it has changed at all)
+// 	if (_state != this._state)
+// 	{
+// 		this._state = _state;
+// 		this.doSetState(_state);
+// 	}
+// };
+//
+// /**
+//  * Returns the current state of the object. The state is maintained by the
+//  * egwActionObjectInterface and implementations do not have to overwrite this
+//  * function as long as they call the _selectChange function.
+//  */
+// egwActionObjectInterface.prototype.getState = function () {
+// 	return this._state;
+// };
+//
+// /**
+//  * The trigger event function can be called by the action implementation in order
+//  * to tell the AOI to perform some action.
+//  * In the drag/drop handler this function is e.g. used for telling the droppable
+//  * element that there was a drag over/out event.
+//  *
+//  * @param {object} _event
+//  * @param _data
+//  */
+// egwActionObjectInterface.prototype.triggerEvent = function (_event, _data) {
+// 	if (typeof _data == "undefined")
+// 	{
+// 		_data = null;
+// 	}
+//
+// 	return this.doTriggerEvent(_event, _data);
+// };
+//
+// /**
+//  * Scrolls the element into a visble area if it is currently hidden
+//  */
+// egwActionObjectInterface.prototype.makeVisible = function () {
+// 	return this.doMakeVisible();
+// };
 
 /** -- egwActionObjectDummyInterface Class -- **/
+class EgwActionObjectDummyInterface implements EgwActionObjectInterface
+{
+	_state: number;
 
-var egwActionObjectDummyInterface = egwActionObjectInterface;
+	reconnectActionsCallback: Function = function () {
+
+	}
+
+	reconnectActionsContext: any;
+
+	stateChangeCallback(_callback, _context)
+	{
+		this.stateChangeCallback = _callback;
+		this.stateChangeContext = _context;
+	}
+
+	stateChangeContext: any;
+
+
+	getDOMNode(): Element
+	{
+		return undefined;
+	}
+
+	getState(): typeof EGW_AO_STATE_NORMAL | typeof EGW_AO_STATE_VISIBLE
+	{
+		return undefined;
+	}
+
+	makeVisible(): void
+	{
+	}
+
+	reconnectActions(): void
+	{
+		if (this.reconnectActionsCallback)
+		{
+			this.reconnectActionsCallback.call(this.reconnectActionsContext);
+		}
+	}
+
+	setReconnectActionsCallback(_callback: Function, _context: any): void
+	{
+		this.reconnectActionsCallback = _callback;
+		this.reconnectActionsContext = _context;
+	}
+
+	setState(_state: any): void
+	{
+	}
+
+	setStateChangeCallback(_callback: Function, _context: any): void
+	{
+	}
+
+	triggerEvent(_event: any, _data: any): boolean
+	{
+		return false;
+	}
+
+	/**
+	 * Internal function which should be used whenever the select status of the object
+	 * has been changed by the user. This will automatically calculate the new state of
+	 * the object and call the stateChangeCallback (if it has been set)
+	 *
+	 * @param {number} _stateBit is the bit in the state bit which should be changed
+	 * @param {boolean} _set specifies whether the state bit should be set or not
+	 * @param {boolean} _shiftState
+	 */
+	updateState(_stateBit: number, _set: boolean, _shiftState: boolean): void
+	{
+		// Calculate the new state
+		const newState = egwSetBit(this._state, _stateBit, _set);
+
+		// Call the stateChangeCallback if the state really changed
+		if (this.stateChangeCallback)
+		{
+			this._state = this.stateChangeCallback.call(this.stateChangeContext, newState, _stateBit, _shiftState);
+		} else
+		{
+			this._state = newState;
+		}
+	}
+
+}
+
+//var egwActionObjectDummyInterface = EgwActionObjectDummyInterface.constructor;
 
 /** egwActionObjectManager Object **/
 
@@ -2493,15 +2728,42 @@ var egwActionObjectDummyInterface = egwActionObjectInterface;
  * @param {string} _manager
  * @return {egwActionObjectManager}
  */
-export function egwActionObjectManager(_id, _manager)
+export class EgwActionObjectManager extends EgwActionObject
 {
-	var ao = new egwActionObject(_id, null, new egwActionObjectInterface(),
-		_manager, EGW_AO_FLAG_IS_CONTAINER);
+	constructor(_id: string, _manager: EgwActionManager)
+	{
+		const aoi: EgwActionObjectInterface = {
+			_state: EGW_AO_STATE_NORMAL || EGW_AO_STATE_VISIBLE, reconnectActionsCallback(p0)
+			{
+			}, reconnectActionsContext: undefined, stateChangeCallback(p0)
+			{
+			}, stateChangeContext: undefined, getDOMNode(): Element
+			{
+				return undefined;
+			}, getState(): typeof EGW_AO_STATE_NORMAL | typeof EGW_AO_STATE_VISIBLE
+			{
+				return undefined;
+			}, makeVisible(): void
+			{
+			}, reconnectActions(): void
+			{
+			}, setReconnectActionsCallback(_callback: Function, _context: any): void
+			{
+			}, setState(_state: any): void
+			{
+			}, setStateChangeCallback(_callback: Function, _context: any): void
+			{
+			}, triggerEvent(_event: any, _data: any): boolean
+			{
+				return false;
+			}, updateState(_stateBit: number, _set: boolean, _shiftState: boolean): void
+			{
+			}
+		};
+		super(_id, null, aoi, _manager, EGW_AO_FLAG_IS_CONTAINER);
+		this.triggerCallback = function () {
+			return false;
+		}
+	}
 
-	// The object manager doesn't allow selections and cannot perform actions
-	ao.triggerCallback = function () {
-		return false;
-	};
-
-	return ao;
 }

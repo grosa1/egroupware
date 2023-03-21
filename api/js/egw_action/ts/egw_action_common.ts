@@ -280,14 +280,15 @@ export function egwQueueCallback(_proc: { apply: (arg0: any, arg1: any) => void;
  * @param array _acceptedTypes is an array of types which contains the "typeof"
  *    strings of accepted non-functions in setValue
  */
-export class egwFnct {
+export class EgwFnct
+{
     private readonly context: any;
     private readonly acceptedTypes: string[];
-    private functionToPerform;
+    functionToPerform;
     private value;
     // Flag for if this action is using a default handler
     // I don't think this is ever used @unused
-    private readonly isDefault;
+    public isDefault;
 
     constructor(_context = null, _default: any = false, _acceptedTypes = ["boolean"]) {
         this.context = _context;
@@ -338,8 +339,8 @@ export class egwFnct {
     /**
      * Executes the function
      */
-    public exec() {
-        this.functionToPerform ? this.functionToPerform.apply(this.context, arguments) : this.value
+    public exec(...args) {
+        this.functionToPerform ? this.functionToPerform.apply(this.context, ...args) : this.value
     }
 
 }
