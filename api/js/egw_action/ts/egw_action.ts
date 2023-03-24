@@ -696,7 +696,7 @@ export class EgwAction
 	 *
 	 * @param {(string|function)} _value
 	 */
-	private setDefaultExecute(_value: string | Function): void
+	public setDefaultExecute(_value: string | Function): void
 	{
 		// Check whether the onExecute handler of this action should be set
 		if (this.type != "actionManager" && !this.onExecute.hasHandler())
@@ -879,7 +879,7 @@ export class EgwAction
 	 * @param {boolean} _addChildren is used internally to prevent parent elements from
 	 *    adding their children automatically to the tree.
 	 */
-	private appendToTree(_tree: any, _addChildren: boolean)
+	public appendToTree(_tree: any, _addChildren: boolean)
 	{
 		let _addParent = false;
 		if (typeof _addChildren == "undefined")
@@ -911,8 +911,8 @@ export class EgwAction
 			}
 
 			// Check whether this element has already been added to the parent container
-			var added = false;
-			for (var i = 0; i < parent_cntr.children.length; i++)
+			let added = false;
+			for (let i = 0; i < parent_cntr.children.length; i++)
 			{
 				if (parent_cntr.children[i].action == this)
 				{
@@ -928,8 +928,8 @@ export class EgwAction
 			}
 		} else
 		{
-			var added = false;
-			for (var i = 0; i < root.length; i++)
+			let added = false;
+			for (let i = 0; i < root.length; i++)
 			{
 				if (root[i].action == this)
 				{
@@ -1013,20 +1013,20 @@ export class EgwActionManager extends EgwAction
 }
 
 
-/** egwActionImplementation Interface **/
+/** EgwActionImplementation Interface **/
 
 /**
- * Abstract interface for the egwActionImplementation object. The egwActionImplementation
+ * Abstract interface for the EgwActionImplementation object. The EgwActionImplementation
  * object is responsible for inserting the actual action representation (context menu,
  * drag-drop code) into the DOM Tree by using the egwActionObjectInterface object
  * supplied by the object.
  * To write a "class" which derives from this object, simply write a own constructor,
- * which replaces "this" with a "new egwActionImplementation" and implement your
+ * which replaces "this" with a "new EgwActionImplementation" and implement your
  * code in "doRegisterAction" und "doUnregisterAction".
  * Register your own implementation within the _egwActionClasses object.
  *
  */
-interface egwActionImplementation
+export interface EgwActionImplementation
 {
 	/**
 	 * @param {object} _actionObjectInterface is the AOI in which the implementation
@@ -1041,7 +1041,7 @@ interface egwActionImplementation
 	registerAction: (_actionObjectInterface: EgwActionObjectInterface, _triggerCallback: Function, _context: object) => boolean;
 	/**
 	 * Unregister action will be called before an actionObjectInterface is destroyed,
-	 * which gives the egwActionImplementation the opportunity to remove the previously
+	 * which gives the EgwActionImplementation the opportunity to remove the previously
 	 * injected code.
 	 *
 	 * @param {egwActionObjectInterface} _actionObjectInterface
@@ -1112,31 +1112,6 @@ export class egwActionLink
  * @param {number} _flags a set of additional flags being applied to the object,
  *    defaults to 0
  */
-export function egwActionObject(_id, _parent, _iface, _manager, _flags)
-{
-	//Preset some parameters
-	if (typeof _manager == "undefined" && typeof _parent == "object" && _parent) _manager = _parent.manager;
-	if (typeof _flags == "undefined") _flags = 0;
-
-	this.id = _id;
-	this.parent = _parent;
-	this.children = [];
-	this.actionLinks = [];
-	this.manager = _manager;
-	this.flags = _flags;
-	this.data = null;
-	this.setSelectedCallback = null;
-
-	this.registeredImpls = [];
-
-	// Two variables which help fast travelling through the object tree, when
-	// searching for the selected/focused object.
-	this.selectedChildren = [];
-	this.focusedChild = null;
-
-	this.setAOI(_iface);
-}
-
 export class EgwActionObject
 {
 	readonly id: string
@@ -1287,7 +1262,7 @@ export class EgwActionObject
 			obj.parent = this;
 		} else if (typeof _id == "string")
 		{
-			obj = new egwActionObject(_id, this, _iface, this.manager, _flags);
+			obj = new EgwActionObject(_id, this, _iface, this.manager, _flags);
 		}
 
 		if (obj)
@@ -2394,7 +2369,7 @@ export class EgwActionObject
  * The egwActionObjectInterface has to be implemented for each actual object in
  * the browser. E.g. for the object "DataGridRow", there has to be an
  * egwActionObjectInterface which is responsible for returning the outer DOMNode
- * of the object to which JS-Events may be attached by the egwActionImplementation
+ * of the object to which JS-Events may be attached by the EgwActionImplementation
  * object, and to do object specific stuff like highlighting the object in the
  * correct way and to route state changes (like: "object has been selected")
  * to the egwActionObject object the interface is associated to.
@@ -2439,7 +2414,7 @@ export function egwActionObjectInterface()
  * The egwActionObjectInterface has to be implemented for each actual object in
  * the browser. E.g. for the object "DataGridRow", there has to be an
  * egwActionObjectInterface which is responsible for returning the outer DOMNode
- * of the object to which JS-Events may be attached by the egwActionImplementation
+ * of the object to which JS-Events may be attached by the EgwActionImplementation
  * object, and to do object specific stuff like highlighting the object in the
  * correct way and to route state changes (like: "object has been selected")
  * to the egwActionObject object the interface is associated to.
@@ -2511,126 +2486,8 @@ export interface EgwActionObjectInterface
 	makeVisible(): void;
 }
 
-// /**
-//  * Sets the callback function which will be called when a user interaction changes
-//  * state of the object.
-//  *
-//  * @param {function} _callback
-//  * @param {object} _context
-//  */
-// egwActionObjectInterface.prototype.setStateChangeCallback = function (_callback, _context) {
-// 	this.stateChangeCallback = _callback;
-// 	this.stateChangeContext = _context;
-// };
-//
-// /**
-//  * Sets the reconnectActions callback, which will be called by the AOI if its
-//  * DOM-Node has been replaced and the actions have to be re-registered.
-//  *
-//  * @param {function} _callback
-//  * @param {object} _context
-//  */
-// egwActionObjectInterface.prototype.setReconnectActionsCallback = function (_callback, _context) {
-// 	this.reconnectActionsCallback = _callback;
-// 	this.reconnectActionsContext = _context;
-// };
-//
-// /**
-//  * Will be called by the aoi if the actions have to be re-registered due to a
-//  * DOM-Node exchange.
-//  */
-// egwActionObjectInterface.prototype.reconnectActions = function () {
-// 	if (this.reconnectActionsCallback)
-// 	{
-// 		this.reconnectActionsCallback.call(this.reconnectActionsContext);
-// 	}
-// };
-//
-// /**
-//  * Internal function which should be used whenever the select status of the object
-//  * has been changed by the user. This will automatically calculate the new state of
-//  * the object and call the stateChangeCallback (if it has been set)
-//  *
-//  * @param {number} _stateBit is the bit in the state bit which should be changed
-//  * @param {boolean} _set specifies whether the state bit should be set or not
-//  * @param {boolean} _shiftState
-//  */
-// egwActionObjectInterface.prototype.updateState = function (_stateBit, _set, _shiftState) {
-// 	// Calculate the new state
-// 	var newState = egwSetBit(this._state, _stateBit, _set);
-//
-// 	// Call the stateChangeCallback if the state really changed
-// 	if (this.stateChangeCallback)
-// 	{
-// 		this._state = this.stateChangeCallback.call(this.stateChangeContext, newState,
-// 			_stateBit, _shiftState);
-// 	} else
-// 	{
-// 		this._state = newState;
-// 	}
-// };
-//
-// /**
-//  * Returns the DOM-Node the ActionObject is actually a representation of.
-//  * Calls the internal "doGetDOMNode" function, which has to be overwritten
-//  * by implementations of this class.
-//  */
-// egwActionObjectInterface.prototype.getDOMNode = function (): Element {
-// 	return this.doGetDOMNode();
-// };
-//
-// /**
-//  * Sets the state of the object.
-//  * Calls the internal "doSetState" function, which has to be overwritten
-//  * by implementations of this class. The state-change callback must not be evoked!
-//  *
-//  * @param _state is the state of the object.
-//  */
-// egwActionObjectInterface.prototype.setState = function (_state) {
-// 	//Call the doSetState function with the new state (if it has changed at all)
-// 	if (_state != this._state)
-// 	{
-// 		this._state = _state;
-// 		this.doSetState(_state);
-// 	}
-// };
-//
-// /**
-//  * Returns the current state of the object. The state is maintained by the
-//  * egwActionObjectInterface and implementations do not have to overwrite this
-//  * function as long as they call the _selectChange function.
-//  */
-// egwActionObjectInterface.prototype.getState = function () {
-// 	return this._state;
-// };
-//
-// /**
-//  * The trigger event function can be called by the action implementation in order
-//  * to tell the AOI to perform some action.
-//  * In the drag/drop handler this function is e.g. used for telling the droppable
-//  * element that there was a drag over/out event.
-//  *
-//  * @param {object} _event
-//  * @param _data
-//  */
-// egwActionObjectInterface.prototype.triggerEvent = function (_event, _data) {
-// 	if (typeof _data == "undefined")
-// 	{
-// 		_data = null;
-// 	}
-//
-// 	return this.doTriggerEvent(_event, _data);
-// };
-//
-// /**
-//  * Scrolls the element into a visble area if it is currently hidden
-//  */
-// egwActionObjectInterface.prototype.makeVisible = function () {
-// 	return this.doMakeVisible();
-// };
-
 /** -- egwActionObjectDummyInterface Class -- **/
-class EgwActionObjectDummyInterface implements EgwActionObjectInterface
+export class EgwActionObjectDummyInterface implements EgwActionObjectInterface
 {
 	_state: number;
 
