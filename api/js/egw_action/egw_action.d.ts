@@ -13,6 +13,8 @@
  * @license http://opensource.org/licenses/gpl-license.php GPL - GNU General Public License
  * @package egw_action
  */
+import {EgwActionManager} from "./ts/egw_action";
+
 /**
  * Returns the action manager for the given application - each application has its
  * own sub-ActionManager in the global action manager object to prevent collisions
@@ -52,9 +54,9 @@ declare function egw_getAppObjectManager(_create?: boolean, _appName?: string): 
  * Returns the action manager for the current application
  *
  * @param {boolean} _create
- * @return {egwActionManager}
+ * @return {EgwActionManager}
  */
-declare function egw_getAppActionManager(_create: boolean): typeof egwActionManager;
+declare function egw_getAppActionManager(_create: boolean): EgwActionManager;
 /** egwActionHandler Interface **/
 /**
  * Constructor for the egwActionHandler interface which (at least) should have the
@@ -176,11 +178,11 @@ declare function _egwActionTreeContains(_tree: any, _elem: any): any;
  * egwActionManager manages a list of actions - it overwrites the egwAction class
  * and allows child actions to be added to it.
  *
- * @param {egwAction} _parent
+ * @param {EgwAction} _parent
  * @param {string} _id
- * @return {egwActionManager}
+ * @return {EgwActionManager}
  */
-declare function egwActionManager(_parent: egwAction, _id: string): typeof egwActionManager;
+declare function egwActionManager(_parent: egwAction, _id: string): EgwActionManager;
 /** egwActionImplementation Interface **/
 /**
  * Abstract interface for the egwActionImplementation object. The egwActionImplementation
@@ -221,7 +223,7 @@ declare class egwActionLink {
      * This gives each action object the possibility to decide, whether the action
      * should be active in this context or not.
      *
-     * @param _manager is a reference to the egwActionManager whic contains the action
+     * @param _manager is a reference to the egwActionManager which contains the action
      * 	the object wants to link to.
      */
     constructor(_manager: any);
@@ -245,13 +247,13 @@ declare class egwActionLink {
  * @param {egwActionObject} _parent is the parent object in the hirachy. This may be set to NULL
  * @param {egwActionObjectInterface} _iface is the egwActionObjectInterface which connects the object
  * 	to the outer world.
- * @param {egwActionManager} _manager is the action manager this object is connected to
+ * @param {EgwActionManager} _manager is the action manager this object is connected to
  * 	this object to the DOM tree. If the _manager isn't supplied, the parent manager
  * 	is taken.
  * @param {number} _flags a set of additional flags being applied to the object,
  * 	defaults to 0
  */
-declare function egwActionObject(_id: string, _parent: egwActionObject, _iface?: egwActionObjectInterface, _manager?: typeof egwActionManager, _flags?: number): void;
+declare function egwActionObject(_id: string, _parent: egwActionObject, _iface?: egwActionObjectInterface, _manager?: EgwActionManager, _flags?: number): void;
 declare class egwActionObject {
     /**
      * The egwActionObject represents an abstract object to which actions may be
@@ -263,18 +265,18 @@ declare class egwActionObject {
      * @param {egwActionObject} _parent is the parent object in the hirachy. This may be set to NULL
      * @param {egwActionObjectInterface} _iface is the egwActionObjectInterface which connects the object
      * 	to the outer world.
-     * @param {egwActionManager} _manager is the action manager this object is connected to
+     * @param {EgwActionManager} _manager is the action manager this object is connected to
      * 	this object to the DOM tree. If the _manager isn't supplied, the parent manager
      * 	is taken.
      * @param {number} _flags a set of additional flags being applied to the object,
      * 	defaults to 0
      */
-    constructor(_id: string, _parent: egwActionObject, _iface?: egwActionObjectInterface, _manager?: typeof egwActionManager, _flags?: number);
+    constructor(_id: string, _parent: egwActionObject, _iface?: egwActionObjectInterface, _manager?: EgwActionManager, _flags?: number);
     id: string;
     parent: egwActionObject;
     children: any[];
     actionLinks: any[];
-    manager: typeof egwActionManager;
+    manager: EgwActionManager;
     flags: number;
     data: any;
     setSelectedCallback: any;
@@ -353,7 +355,7 @@ declare class egwActionObjectInterface {
     setReconnectActionsCallback(_callback: Function, _context: any): void;
     reconnectActions(): void;
     updateState(_stateBit: number, _set: boolean, _shiftState: boolean): void;
-    getDOMNode(): any;
+    getDOMNode(): Element;
     setState(_state: any): void;
     getState(): number;
     triggerEvent(_event: any, _data: any): boolean;
@@ -772,6 +774,7 @@ declare class egwMenu {
  */
 declare function egwMenuItem(_parent: any, _id: any): void;
 declare class egwMenuItem {
+
     /**
      * Constructor for the egwMenuItem. Each entry in a menu (including seperators)
      * is represented by a menu item.
@@ -790,6 +793,8 @@ declare class egwMenuItem {
     shortcutCaption: any;
     children: any[];
     parent: any;
+    //can be set for radio button
+    _dhtmlx_grpid: string;
     getItem(_id: any): any;
     setGlobalOnClick(_onClick: any): void;
     addItem(_id: any, _caption: any, _iconUrl: any, _onClick: any): egwMenuItem;
