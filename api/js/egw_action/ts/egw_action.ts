@@ -27,7 +27,7 @@ import {
 	EGW_AO_EXEC_THIS,
 	EGW_AO_EXEC_SELECTED,
 	EGW_KEY_A,
-	EGW_KEY_SPACE
+	EGW_KEY_SPACE, EGW_AO_STATES
 } from './egw_action_constants';
 import {
 	EgwFnct, egwActionStoreJSON, egwBitIsSet, egwQueueCallback, egwSetBit, egwObjectLength
@@ -35,7 +35,7 @@ import {
 import '../egw_action_popup.js';
 import "../egw_action_dragdrop.js";
 import "../egw_menu_dhtmlx.js";
-import {app, egw} from "../../jsapi/egw_global";
+import {app, egw, Iegw} from "../../jsapi/egw_global";
 import {Et2Dialog} from "../../etemplate/Et2Dialog/Et2Dialog";
 import {nm_action} from "../../etemplate/et2_extension_nextmatch_actions";
 
@@ -81,22 +81,14 @@ export var egw_globalObjectManager = null;
  *
  * @param _id is the name of the sub-actionManager which should be returned.
  *    If the action manager does not exist right now, it is created. If the
- *    parameter is ommited or null, the global action manager is returned.
+ *    parameter is omitted or null, the global action manager is returned.
  * @param {boolean} [_create=true] If an objectManager with the given id is not
  *    found, it will be created at the top level.
  * @param {number} [_search_depth=Infinite] How deep into existing action children
  *    to search.
  */
-export function egw_getActionManager(_id?: null, _create?: boolean, _search_depth?: number)
+export function egw_getActionManager(_id?: null, _create: boolean = true, _search_depth: number = Number.MAX_VALUE)
 {
-	if (typeof _create == 'undefined')
-	{
-		_create = true;
-	}
-	if (typeof _search_depth == "undefined")
-	{
-		_search_depth = Number.MAX_VALUE;
-	}
 
 	// Check whether the global action manager had been created, if not do so
 	let res = egw_globalActionManager;
@@ -158,7 +150,7 @@ export function egw_getObjectManager(_id, _create = true, _search_depth = Number
  * Returns the object manager for the current application
  *
  * @param {boolean} _create
- * @param {string} _appName //appname might not always be the current app, e.g. running app content under admin tab
+ * @param {string} _appName //appName might not always be the current app, e.g. running app content under admin tab
  * @return {egwActionObjectManager}
  */
 export function egw_getAppObjectManager(_create, _appName)
@@ -489,15 +481,13 @@ export class EgwAction
 			if (typeof _app == "undefined") _app = egw(window).app_name()
 			/*
 			this is an egw Object as defined in egw_core.js
-			TODO does there a type exist for this?
 			probably not because it changes on runtime
 			 */
-			const localEgw = window.egw(_app);
+			const localEgw: Iegw = window.egw(_app);
 			//replaced jQuery calls
 			if (Array.isArray(_actions))
 			{
 				//_actions is now an object for sure
-				//TODO check if this ever happens
 				//happens in test website
 				_actions = {..._actions};
 			}
@@ -627,12 +617,9 @@ export class EgwAction
 	{
 		if (_target.interface.getDOMNode())
 		{
-			//TODO check if this is correct jQuery replacement
 			return !(_target.interface.getDOMNode()).classList.contains(_action.data.disableClass);
 		} else if (_target.id)
 		{
-			//TODO when do we even end up here
-
 			// Checking on a something that doesn't have a DOM node, like a nm row
 			// that's not currently rendered
 			const data = egw.dataGetUIDdata(_target.id);
@@ -822,8 +809,7 @@ export class EgwAction
 			{
 				if (this.data.policy_confirmation && egw.app('policy'))
 				{
-					//TODO how to use 'es6 import statement: Promise.all([].concat(_jsFiles).map((src)=>import(_prefix+src))).then(...)'
-					egw.includeJS(egw.link('/policy/js/app.min.js'), () => {
+					import(egw.link('/policy/js/app.min.js')).then(() => {
 							if (typeof app.policy === 'undefined' || typeof app.policy.confirm === 'undefined')
 							{
 								app.policy = new app.classes.policy();
@@ -873,29 +859,24 @@ export class EgwAction
 	 * The appendToGraph function generates an action tree which automatically contains
 	 * all parent elements. If the appendToGraph function is called for a
 	 *
-	 * @param {not an array} _tree contains the tree structure - pass an object containing
+	 * @param {not an array} _tree contains the tree structure - pass an object containing {root:Tree}??TODO
 	 *    the empty array "root" to this function {"root": []}. The result will be stored in
 	 *    this array.
 	 * @param {boolean} _addChildren is used internally to prevent parent elements from
 	 *    adding their children automatically to the tree.
 	 */
-	public appendToTree(_tree: any, _addChildren: boolean)
+	public appendToTree(_tree: { root: Tree }, _addChildren: boolean = true)
 	{
-		let _addParent = false;
+
 		if (typeof _addChildren == "undefined")
 		{
 			_addChildren = true;
 		}
 
-		if (typeof _addParent == "undefined")
-		{
-			_addParent = true;
-		}
-
 		// Preset some variables
-		var root = _tree.root;
-		var parent_cntr = null;
-		var cntr = {
+		const root: Tree = _tree.root;
+		let parentNode: TreeElem = null;
+		let node: TreeElem = {
 			"action": this, "children": []
 		};
 
@@ -903,20 +884,20 @@ export class EgwAction
 		if (this.parent && this.type != "actionManager")
 		{
 			// Check whether the parent container has already been added to the tree
-			parent_cntr = _egwActionTreeContains(root, this.parent);
+			parentNode = _egwActionTreeFind(root, this.parent);
 
-			if (!parent_cntr)
+			if (!parentNode)
 			{
-				parent_cntr = this.parent.appendToTree(_tree, false);
+				parentNode = this.parent.appendToTree(_tree, false);
 			}
 
 			// Check whether this element has already been added to the parent container
 			let added = false;
-			for (let i = 0; i < parent_cntr.children.length; i++)
+			for (const child of parentNode.children)
 			{
-				if (parent_cntr.children[i].action == this)
+				if (child.action == this)
 				{
-					cntr = parent_cntr.children[i];
+					node = child;
 					added = true;
 					break;
 				}
@@ -924,16 +905,16 @@ export class EgwAction
 
 			if (!added)
 			{
-				parent_cntr.children.push(cntr);
+				parentNode.children.push(node);
 			}
 		} else
 		{
 			let added = false;
-			for (let i = 0; i < root.length; i++)
+			for (const treeElem of root)
 			{
-				if (root[i].action == this)
+				if (treeElem.action == this)
 				{
-					cntr = root[i];
+					node = treeElem;
 					added = true;
 					break;
 				}
@@ -942,19 +923,19 @@ export class EgwAction
 			if (!added)
 			{
 				// Add this element to the root if it has no parent
-				root.push(cntr);
+				root.push(node);
 			}
 		}
 
 		if (_addChildren)
 		{
-			for (var i = 0; i < this.children.length; i++)
+			for (const child of this.children)
 			{
-				this.children[i].appendToTree(_tree, true);
+				child.appendToTree(_tree, true);
 			}
 		}
 
-		return cntr;
+		return node;
 	};
 
 
@@ -968,18 +949,27 @@ export class EgwAction
 	};
 })()
 
-function _egwActionTreeContains(_tree, _elem)
+type TreeElem = { action: EgwAction, children: Tree }
+type Tree = TreeElem[]
+
+/**
+ * finds an EgwAction in the given tree
+ * @param {Tree}_tree where to search
+ * @param {EgwAction}_elem elem to search
+ * @returns {TreeElem} the treeElement for corresponding _elem if found, null else
+ */
+function _egwActionTreeFind(_tree: Tree, _elem: EgwAction): TreeElem
 {
-	for (var i = 0; i < _tree.length; i++)
+	for (const current of _tree)
 	{
-		if (_tree[i].action == _elem)
+		if (current.action == _elem)
 		{
-			return _tree[i];
+			return current;
 		}
 
-		if (typeof _tree[i].children != "undefined")
+		if (typeof current.children != "undefined")
 		{
-			var elem = _egwActionTreeContains(_tree[i].children, _elem);
+			const elem = _egwActionTreeFind(current.children, _elem);
 			if (elem)
 			{
 				return elem;
@@ -1054,17 +1044,17 @@ export interface EgwActionImplementation
 }
 
 
-/** egwActionLink Object **/
+/** EgwActionLink Object **/
 
 /**
- * The egwActionLink is used to interconnect egwActionObjects and egwActions.
+ * The EgwActionLink is used to interconnect egwActionObjects and egwActions.
  * This gives each action object the possibility to decide, whether the action
  * should be active in this context or not.
  *
  * @param _manager is a reference to the egwActionManager whic contains the action
  *    the object wants to link to.
  */
-export class egwActionLink
+export class EgwActionLink
 {
 	enabled = true;
 	visible = true;
@@ -1116,8 +1106,8 @@ export class EgwActionObject
 {
 	readonly id: string
 	private readonly parent: EgwActionObject
-	private readonly children: any[] = []
-	private actionLinks: any[] = []
+	private readonly children: EgwActionObject[] = []
+	private actionLinks: EgwActionLink[] = []
 	interface: EgwActionObjectInterface
 	readonly manager: EgwActionManager
 	private readonly flags: number
@@ -1165,7 +1155,7 @@ export class EgwActionObject
 	{
 		if (_aoi == null)
 		{
-			_aoi = new EgwActionObjectDummyInterface();
+			_aoi = new EgwActionObjectBase();
 		}
 
 		// Copy the state from the old interface
@@ -1358,7 +1348,7 @@ export class EgwActionObject
 	/**
 	 * Returns the first parent which has the container flag
 	 */
-	getContainerRoot()
+	getContainerRoot(): EgwActionObject
 	{
 		if (egwBitIsSet(this.flags, EGW_AO_FLAG_IS_CONTAINER) || this.parent === null)
 		{
@@ -1377,7 +1367,7 @@ export class EgwActionObject
 	 * @param {array} _list is internally used to fetch all selected elements, please
 	 *    omit this parameter when calling the function.
 	 */
-	getSelectedObjects(_test, _list)
+	getSelectedObjects(_test?, _list?)
 	{
 		if (typeof _test == "undefined") _test = null;
 
@@ -1440,15 +1430,16 @@ export class EgwActionObject
 		this.setAllSelected(_select);
 	};
 
+
 	/**
 	 * Creates a list which contains all items of the element tree.
 	 *
 	 * @param {boolean} _visibleOnly
 	 * @param {object} _obj is used internally to pass references to the array inside
-	 *    the object.
+	 * 	the object.
 	 * @return {array}
 	 */
-	flatList(_visibleOnly, _obj)
+	flatList(_visibleOnly?: boolean, _obj?: { elements: EgwActionObject[] })
 	{
 		if (typeof (_obj) == "undefined")
 		{
@@ -1467,9 +1458,9 @@ export class EgwActionObject
 			_obj.elements.push(this);
 		}
 
-		for (var i = 0; i < this.children.length; i++)
+		for (const child of this.children)
 		{
-			this.children[i].flatList(_visibleOnly, _obj);
+			child.flatList(_visibleOnly, _obj);
 		}
 
 		return _obj.elements;
@@ -1486,22 +1477,22 @@ export class EgwActionObject
 	 */
 	traversePath(_to)
 	{
-		var contRoot = this.getContainerRoot();
+		const contRoot: EgwActionObject = this.getContainerRoot();
 
 		if (contRoot)
 		{
 			// Get a flat list of all the hncp elements and search for this object
 			// and the object supplied in the _to parameter.
-			var flatList = contRoot.flatList();
-			var thisId = flatList.indexOf(this);
-			var toId = flatList.indexOf(_to);
+			const flatList = contRoot.flatList();
+			const thisId = flatList.indexOf(this);
+			const toId = flatList.indexOf(_to);
 
 			// Check whether both elements have been found in this part of the tree,
 			// return the slice of that list.
 			if (thisId !== -1 && toId !== -1)
 			{
-				var from = Math.min(thisId, toId);
-				var to = Math.max(thisId, toId);
+				const from = Math.min(thisId, toId);
+				const to = Math.max(thisId, toId);
 
 				return flatList.slice(from, to + 1);
 			}
@@ -1517,6 +1508,7 @@ export class EgwActionObject
 	{
 		if (this.parent === null)
 		{
+			//TODO check: should be -1 for invalid
 			return 0;
 		} else
 		{
@@ -1542,14 +1534,13 @@ export class EgwActionObject
 	 * @param {number} _changedBit
 	 * @param {number} _shiftState is the status of extra keys being pressed during the
 	 *    selection process.
-	 * @param {number}
-	 */
-	_ifaceCallback(_newState, _changedBit, _shiftState)
+	 *///TODO check
+	_ifaceCallback(_newState: number, _changedBit: number, _shiftState?: number)
 	{
 		if (typeof _shiftState == "undefined") _shiftState = EGW_AO_SHIFT_STATE_NONE;
 
-		var selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
-		var visible = egwBitIsSet(_newState, EGW_AO_STATE_VISIBLE);
+		let selected: boolean = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
+		const visible: boolean = egwBitIsSet(_newState, EGW_AO_STATE_VISIBLE);
 
 		// Check whether the visibility of the object changed
 		if (_changedBit == EGW_AO_STATE_VISIBLE && visible != this.getVisible())
@@ -1570,26 +1561,22 @@ export class EgwActionObject
 		// Remove the focus from all children on the same level
 		if (this.parent && visible && _changedBit == EGW_AO_STATE_SELECTED)
 		{
-			var selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
-			var objs = [];
+			selected = egwBitIsSet(_newState, EGW_AO_STATE_SELECTED);
+			let objs = [];
 
 			if (selected)
 			{
-				// Search the index of this object
-				var id = this.parent.children.indexOf(this);
-
-				// Deselect all other objects inside this container, if the "MULTI" shift-
-				// state is not set
+				// Deselect all other objects inside this container, if the "MULTI" shift-state is not set
 				if (!egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_MULTI))
 				{
-					var lst = this.getContainerRoot().setAllSelected(false);
+					this.getContainerRoot().setAllSelected(false);
 				}
 
-				// If the LIST state is active, get all objects inbetween this one and the focused one
+				// If the LIST state is active, get all objects in between this one and the focused one
 				// and set their select state.
 				if (egwBitIsSet(_shiftState, EGW_AO_SHIFT_STATE_BLOCK))
 				{
-					var focused = this.getFocusedObject();
+					const focused = this.getFocusedObject();
 					if (focused)
 					{
 						objs = this.traversePath(focused);
@@ -1641,7 +1628,7 @@ export class EgwActionObject
 					if (this.children.length > 0)
 					{
 						// Get the focused object
-						var focused = this.getFocusedObject();
+						const focused = this.getFocusedObject();
 
 						// Determine the object which should get selected
 						var selObj = null;
@@ -1697,7 +1684,7 @@ export class EgwActionObject
 				this.parent.data.keyboard_select = true;
 
 				// Get the focused object
-				var focused = this.getFocusedObject();
+				const focused = this.getFocusedObject();
 
 				focused.setSelected(!focused.getSelected());
 
@@ -1705,7 +1692,6 @@ export class EgwActionObject
 				focused.makeVisible();
 				return true;
 
-				break;
 			// Handle CTRL-A to select all elements in the current container
 			case EGW_KEY_A:
 				if (_ctrl && !_shift && !_alt)
@@ -1869,9 +1855,8 @@ export class EgwActionObject
 
 	setAllSelected(_selected, _informParent = true)
 	{
-		if (typeof _informParent == "undefined") _informParent = true;
 
-		var state = this.interface.getState();
+		const state = this.interface.getState();
 
 		// Update this element
 		if (egwBitIsSet(state, EGW_AO_STATE_SELECTED) != _selected)
@@ -1881,7 +1866,7 @@ export class EgwActionObject
 			{
 				this.parent.updateSelectedChildren(this, _selected);
 			}
-			if (this.parent.data && this.parent.data.keyboard_select)
+			if (this.parent?.data && this.parent?.data?.keyboard_select)
 			{
 				this.parent.data.keyboard_select = false;
 			}
@@ -1891,7 +1876,7 @@ export class EgwActionObject
 		// deselected and there are selected children.
 		if (_selected || this.selectedChildren.length > 0)
 		{
-			for (var i = 0; i < this.children.length; i++)
+			for (let i = 0; i < this.children.length; i++)
 			{
 				this.children[i].setAllSelected(_selected, false);
 			}
@@ -1901,7 +1886,7 @@ export class EgwActionObject
 		this.selectedChildren = [];
 		if (_selected)
 		{
-			for (var i = 0; i < this.children.length; i++)
+			for (let i = 0; i < this.children.length; i++)
 			{
 				this.selectedChildren.push(this.children[i]);
 			}
@@ -1983,6 +1968,7 @@ export class EgwActionObject
 	 * 			"enabled": true
 	 * 		}
 	 *    ]
+	 *    string[] or {actionID:string,enabled:boolean}[]
 	 *    If an supplied link doesn't exist yet, it will be created (if _doCreate is true)
 	 *    and added to the list. Otherwise the information will just be updated.
 	 * @param {boolean} _recursive If true, the settings will be applied to all child
@@ -1990,19 +1976,18 @@ export class EgwActionObject
 	 * @param {boolean} _doCreate If true, not yet existing links will be created (default true)
 	 */
 
-	updateActionLinks(_actionLinks, _recursive, _doCreate)
+	updateActionLinks(_actionLinks: string[] | { actionId: string, enabled: boolean }[], _recursive: boolean = false, _doCreate: boolean = true)
 	{
-		if (typeof _recursive == "undefined") _recursive = false;
-		if (typeof _doCreate == "undefined") _doCreate = true;
-
-		for (var i = 0; i < _actionLinks.length; i++)
+		for (let elem of _actionLinks)
 		{
-			var elem = _actionLinks[i];
 
 			// Allow single strings for simple action links.
 			if (typeof elem == "string")
 			{
-				elem = {"actionId": elem};
+				elem = {
+					actionId: elem,
+					enabled: true
+				};
 			}
 
 			if (typeof elem.actionId != "undefined" && elem.actionId)
@@ -2011,7 +1996,7 @@ export class EgwActionObject
 				var actionLink = this.getActionLink(elem.actionId);
 				if (!actionLink && _doCreate)
 				{
-					actionLink = new egwActionLink(this.manager);
+					actionLink = new EgwActionLink(this.manager);
 					this.actionLinks.push(actionLink);
 				}
 
@@ -2272,11 +2257,11 @@ export class EgwActionObject
 	 * @param {string} _actionId name of the action associated to the link
 	 */
 
-	getActionLink(_actionId)
+	getActionLink(_actionId: string)
 	{
 		for (var i = 0; i < this.actionLinks.length; i++)
 		{
-			if (this.actionLinks[i].actionObj.id == _actionId)
+			if (this.actionLinks[i].actionObj?.id == _actionId)
 			{
 				return this.actionLinks[i];
 			}
@@ -2376,51 +2361,6 @@ export class EgwActionObject
  *
  * @return {egwActionObjectInterface}
  */
-export function egwActionObjectInterface()
-{
-	//Preset the interface functions
-
-	this.doGetDOMNode = function () {
-		return null;
-	};
-
-	// _outerCall may be used to determine, whether the state change has been
-	// evoked from the outside and the stateChangeCallback has to be called
-	// or not.
-	this.doSetState = function (_state, _outerCall) {
-	};
-
-	// The doTiggerEvent function may be overritten by the aoi if it wants to
-	// support certain action implementation specific events like EGW_AI_DRAG_OVER
-	// or EGW_AI_DRAG_OUT
-	this.doTriggerEvent = function (_event, _data) {
-		return false;
-	};
-
-	this.doMakeVisible = function () {
-	};
-
-	this._state = EGW_AO_STATE_NORMAL || EGW_AO_STATE_VISIBLE;
-
-	this.stateChangeCallback = null;
-	this.stateChangeContext = null;
-	this.reconnectActionsCallback = null;
-	this.reconnectActionsContext = null;
-}
-
-/** egwActionObjectInterface Interface **/
-
-/**
- * The egwActionObjectInterface has to be implemented for each actual object in
- * the browser. E.g. for the object "DataGridRow", there has to be an
- * egwActionObjectInterface which is responsible for returning the outer DOMNode
- * of the object to which JS-Events may be attached by the EgwActionImplementation
- * object, and to do object specific stuff like highlighting the object in the
- * correct way and to route state changes (like: "object has been selected")
- * to the egwActionObject object the interface is associated to.
- *
- * @return {egwActionObjectInterface}
- */
 export interface EgwActionObjectInterface
 {
 	//properties
@@ -2487,21 +2427,15 @@ export interface EgwActionObjectInterface
 }
 
 /** -- egwActionObjectDummyInterface Class -- **/
-export class EgwActionObjectDummyInterface implements EgwActionObjectInterface
+export class EgwActionObjectBase implements EgwActionObjectInterface
 {
-	_state: number;
+	_state: EGW_AO_STATES = EGW_AO_STATE_NORMAL || EGW_AO_STATE_VISIBLE;
 
-	reconnectActionsCallback: Function = function () {
+	reconnectActionsCallback: Function
 
-	}
-
+	stateChangeCallback: Function
 	reconnectActionsContext: any;
 
-	stateChangeCallback(_callback, _context)
-	{
-		this.stateChangeCallback = _callback;
-		this.stateChangeContext = _context;
-	}
 
 	stateChangeContext: any;
 
@@ -2511,9 +2445,9 @@ export class EgwActionObjectDummyInterface implements EgwActionObjectInterface
 		return undefined;
 	}
 
-	getState(): typeof EGW_AO_STATE_NORMAL | typeof EGW_AO_STATE_VISIBLE
+	getState(): EGW_AO_STATES
 	{
-		return undefined;
+		return this._state;
 	}
 
 	makeVisible(): void
@@ -2540,6 +2474,8 @@ export class EgwActionObjectDummyInterface implements EgwActionObjectInterface
 
 	setStateChangeCallback(_callback: Function, _context: any): void
 	{
+		this.stateChangeCallback = _callback;
+		this.stateChangeContext = _context;
 	}
 
 	triggerEvent(_event: any, _data: any): boolean
@@ -2559,7 +2495,8 @@ export class EgwActionObjectDummyInterface implements EgwActionObjectInterface
 	updateState(_stateBit: number, _set: boolean, _shiftState: boolean): void
 	{
 		// Calculate the new state
-		const newState = egwSetBit(this._state, _stateBit, _set);
+		//this does not guarantee a valid state at runtime
+		const newState: EGW_AO_STATES = <EGW_AO_STATES>egwSetBit(this._state, _stateBit, _set);
 
 		// Call the stateChangeCallback if the state really changed
 		if (this.stateChangeCallback)
@@ -2571,9 +2508,10 @@ export class EgwActionObjectDummyInterface implements EgwActionObjectInterface
 		}
 	}
 
+
 }
 
-//var egwActionObjectDummyInterface = EgwActionObjectDummyInterface.constructor;
+//var egwActionObjectDummyInterface = EgwActionObjectBase.constructor;
 
 /** egwActionObjectManager Object **/
 
@@ -2624,3 +2562,10 @@ export class EgwActionObjectManager extends EgwActionObject
 	}
 
 }
+
+/**
+ * @deprecated use EgwActionObjectBase instead
+ * this name exist for historical reasons
+ */
+export type egwActionObjectInterface = EgwActionObjectBase
+//TODO other aliases

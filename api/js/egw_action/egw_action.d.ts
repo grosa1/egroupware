@@ -206,9 +206,9 @@ declare class egwActionImplementation {
     unregisterAction(_actionObjectInterface: egwActionObjectInterface): any;
     executeImplementation(_context: any, _selected: any, _links: any): any;
 }
-/** egwActionLink Object **/
+/** EgwActionLink Object **/
 /**
- * The egwActionLink is used to interconnect egwActionObjects and egwActions.
+ * The EgwActionLink is used to interconnect egwActionObjects and egwActions.
  * This gives each action object the possibility to decide, whether the action
  * should be active in this context or not.
  *
@@ -217,9 +217,9 @@ declare class egwActionImplementation {
  */
 declare function egwActionLink(_manager: any): void;
 declare class egwActionLink {
-    /** egwActionLink Object **/
+    /** EgwActionLink Object **/
     /**
-     * The egwActionLink is used to interconnect egwActionObjects and egwActions.
+     * The EgwActionLink is used to interconnect egwActionObjects and egwActions.
      * This gives each action object the possibility to decide, whether the action
      * should be active in this context or not.
      *

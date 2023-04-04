@@ -1,5 +1,6 @@
-
 // noinspection JSUnusedGlobalSymbols
+
+import {valueOf} from "chai";
 
 /**
  * eGroupWare egw_action framework - egw action framework
@@ -18,6 +19,11 @@ export const EGW_AO_STATE_NORMAL = 0x00;
 export const EGW_AO_STATE_SELECTED = 0x01;
 export const EGW_AO_STATE_FOCUSED = 0x02;
 export const EGW_AO_STATE_VISIBLE = 0x04;  //< Can only be set by the AOI, means that the object is attached to the DOM-Tree and visible
+export type EGW_AO_STATES =
+	typeof EGW_AO_STATE_NORMAL
+	| typeof EGW_AO_STATE_SELECTED
+	| typeof EGW_AO_STATE_FOCUSED
+	| typeof EGW_AO_STATE_VISIBLE
 
 export const EGW_AO_EVENT_DRAG_OVER_ENTER = 0x00;
 export const EGW_AO_EVENT_DRAG_OVER_LEAVE = 0x01;
@@ -117,10 +123,6 @@ export const EGW_KEY_F10 = 121;
 export const EGW_KEY_F11 = 122;
 export const EGW_KEY_F12 = 123;
 
-export const EGW_VALID_KEYS = [
-    8, 9, 13, 27, 46, 32, 33, 34, 37, 38, 39, 40, 48, 49, 50, 51, 52, 53, 54,
-    55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
-    81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 93, 112, 113, 114, 115, 116, 117, 118,
-    119, 120, 121, 122, 123
-]
+export const EGW_VALID_KEYS = [8, 9, 13, 27, 46, 32, 33, 34, 37, 38, 39, 40, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 93, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123] as const;
+export type EGW_KEY_TYPES = typeof EGW_VALID_KEYS[number]
 

@@ -6,7 +6,7 @@
 
     <script type="module" src="/egroupware/api/js/jsapi/egw.min.js?1678345504"
             id="egw_script_id"
-            data-app-header="EGroupware" data-url="https://pole.egroupware.org/egroupware"
+            data-app-header="EGroupware" data-url="http://localhost:8080/egroupware"
             data-include="[&quot;api\/js\/dhtmlxtree\/codebase\/dhtmlxcommon.js&quot;,&quot;api\/js\/dhtmlxMenu\/sources\/dhtmlxmenu.js&quot;,&quot;api\/js\/dhtmlxMenu\/sources\/ext\/dhtmlxmenu_ext.js&quot;,&quot;api\/js\/dhtmlxtree\/sources\/dhtmlxtree.js&quot;,&quot;api\/js\/dhtmlxtree\/sources\/ext\/dhtmlxtree_json.js&quot;]"></script>
 
     <!-- JQuery is just used in this example. The egw_action scripts do not
@@ -112,7 +112,7 @@
 <button id="performAction">Perform action...</button>
 <button id="selectAll">Select All</button>
 <script type="module">
-    import {egwActionManager, egwActionObjectManager, egwActionObjectInterface} from "../egw_action.min.js";
+    import {EgwActionManager, EgwActionObjectManager} from "../egw_action.min.js";
     import {
         EGW_AO_STATE_SELECTED,
         EGW_AO_STATE_FOCUSED,
@@ -121,6 +121,7 @@
         EGW_AO_SHIFT_STATE_BLOCK,
     } from '../egw_action_constants.js';
     import {egwBitIsSet, egwSetBit} from '../egw_action_common.js';
+    import {EgwActionObjectBase} from "../../egw_action/egw_action.min.js";
 
     var actionManager = null;
     var objectManager = null;
@@ -132,7 +133,7 @@
     // An action object interface for the listbox - "inherits" from
     // egwActionObjectInterface
     function listboxItemAOI(_node) {
-        var aoi = new egwActionObjectInterface();
+        var aoi = new EgwActionObjectBase();
         aoi.node = _node;
         aoi.checkBox = aoi.node.querySelector('[type="checkbox"]')//(jQuery(":checkbox", aoi.node))[0];
         aoi.checkBox.checked = false;
@@ -210,8 +211,8 @@
 
     function init() {
         //Initialize the action manager and add some actions to it
-        actionManager = new egwActionManager();
-        objectManager = new egwActionObjectManager("", actionManager);
+        actionManager = new EgwActionManager();
+        objectManager = new EgwActionObjectManager("", actionManager);
 
         actionManager.updateActions(
             [

@@ -62,7 +62,7 @@ export function egwSetBit(_set: number, _bit: number, _state: boolean) {
 /**
  * Returns whether the given bit is set in the set.
  */
-export function egwBitIsSet(_set, _bit) {
+export function egwBitIsSet(_set: number, _bit: number) {
     return (_set & _bit) > 0;
 }
 
